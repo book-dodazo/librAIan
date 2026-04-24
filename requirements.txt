@@ -1,0 +1,35 @@
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy==2.0.23
+sqlmodel==0.0.14
+psycopg2-binary==2.9.9
+
+# Vector DB
+qdrant-client==1.7.0
+
+# AI/ML
+sentence-transformers==2.2.2
+FlagEmbedding==1.2.10
+rank-bm25==0.2.2
+
+# API
+requests==2.31.0
+beautifulsoup4==4.12.2
+
+# Utils
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# Dev
+black==23.12.0
+isort==5.13.2
+mypy==1.7.1

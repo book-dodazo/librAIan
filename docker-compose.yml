@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: libraian_postgres
+    environment:
+      POSTGRES_DB: libraian
+      POSTGRES_USER: libraian_user
+      POSTGRES_PASSWORD: libraian_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libraian_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: libraian_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: libraian_api
+    environment:
+      DATABASE_URL: postgresql://libraian_user:libraian_pass@postgres:5432/libraian
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn src.api.main:app --host 0.0.0.0 --reload
+
+volumes:
+  postgres_data:
+  qdrant_data:

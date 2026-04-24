@@ -1,0 +1,32 @@
+[
+  {
+    "query_id": "Q001",
+    "query": "지친 직장인을 위한 가벼운 에세이",
+    "persona": "직장인",
+    "scenario": "퇴근 후 힐링",
+    "relevant_isbns": [],
+    "hard_negatives": [],
+    "query_type": "모호한 질의",
+    "difficulty": "easy"
+  },
+  {
+    "query_id": "Q002",
+    "query": "고등학생을 위한 과학 소설",
+    "persona": "학생",
+    "scenario": "학습 동기 부여",
+    "relevant_isbns": [],
+    "hard_negatives": [],
+    "query_type": "구체적 질의",
+    "difficulty": "medium"
+  },
+  {
+    "query_id": "Q003",
+    "query": "코딩을 처음 시작하는 사람을 위한 책",
+    "persona": "초보 개발자",
+    "scenario": "프로그래밍 입문",
+    "relevant_isbns": [],
+    "hard_negatives": [],
+    "query_type": "교육적 질의",
+    "difficulty": "easy"
+  }
+]
