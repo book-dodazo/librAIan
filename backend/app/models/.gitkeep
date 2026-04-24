@@ -1,0 +1,2 @@
+# models 디렉터리는 SQLAlchemy/SQLModel DB 모델을 보관합니다.
+# 빈 폴더는 Git에 포함되지 않기 때문에 .gitkeep 파일을 추가합니다.
