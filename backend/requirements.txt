@@ -1,0 +1,18 @@
+# ============================================================
+# requirements.txt
+# Poetry 대신 pip + conda 환경에서 설치할 때 사용
+#
+# 설치 방법:
+#   pip install -r requirements.txt
+#
+# [FIX] pydantic-core 버전 명시 — conda 환경에서 버전 충돌로
+#       ModuleNotFoundError: pydantic_core._pydantic_core 발생하던 문제 해결
+# ============================================================
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+openai>=1.54.0
+pydantic>=2.9.0
+pydantic-core>=2.23.0
+pydantic-settings>=2.5.0
+httpx>=0.27.0

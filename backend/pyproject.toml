@@ -1,0 +1,37 @@
+[tool.poetry]
+name = "ai-book-curation-backend"
+version = "0.1.0"
+description = "AI 도서 큐레이션 시스템 백엔드 - C파트"
+authors = ["Your Team"]
+python = "^3.11"
+
+[tool.poetry.dependencies]
+# 웹 프레임워크
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+
+# CLOVA Studio는 OpenAI 호환 엔드포인트를 제공 → openai SDK 재활용
+openai = "^1.54.0"
+
+# 환경변수 관리 (.env 파일 자동 로드)
+pydantic-settings = "^2.5.0"
+
+# HTTP 클라이언트 (비동기)
+httpx = "^0.27.0"
+
+[tool.poetry.group.dev.dependencies]
+# 테스트
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+httpx = "^0.27.0"   # TestClient용
+
+# 코드 품질
+ruff = "^0.7.0"     # 린터 + 포매터 (black + flake8 통합)
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
