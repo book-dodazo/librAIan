@@ -6,6 +6,13 @@
 #   v0.1 - 최초 작성
 #          P7 토론 결과 기반 RAG 쿼리 생성
 #          BM25 키워드 + Dense 자연어 + 메타데이터 필터
+#   v0.2 - constraints 처리 개선
+#          page_range/pub_year 리스트로 변경 (동일 타입 다중 지원)
+#          author/nonauthor → author_include/author_exclude 필터 추가
+#   v0.3 - [FIX] ConstraintOperator 미사용 import 제거
+#          [FIX] _summarize_slots author/nonauthor 누락 수정
+#          [FIX] _fallback_keywords author 키워드 누락 수정
+#          TODO 주석 추가 (_apply_refinement 미완성 명시)
 # ============================================================
 """
 RAG 쿼리 빌더
@@ -30,7 +37,6 @@ from app.modules.llm.clova_client import chat_complete_json
 from app.modules.slot.prompts import RAG_QUERY_GENERATION_PROMPT
 from app.modules.slot.schema import (
     AnchorType,
-    ConstraintOperator,
     SessionContext,
 )
 
@@ -155,7 +161,17 @@ def _summarize_slots(context: SessionContext) -> str:
         lines.append(f"기준 {context.anchor.type.value} - {context.anchor.value}")
 
     for c in slots.constraints:
-        lines.append(f"제약 - {c.raw or c.value}")
+        if c.type == "author":
+            # LLM이 포함 작가를 쿼리에 반영할 수 있도록 명시
+            lines.append(f"포함할 작가 - {c.value}")
+        elif c.type == "nonauthor":
+            # LLM이 제외 작가를 쿼리에 반영할 수 있도록 명시
+            lines.append(f"제외할 작가 - {c.value}")
+        elif c.type == "custom":
+            lines.append(f"제약(자연어) - {c.raw or c.value}")
+        else:
+            op = c.operator.value if c.operator else ""
+            lines.append(f"제약({c.type}) - {c.value} {op}".strip())
 
     return "\n".join(lines) if lines else "정보 없음"
 
@@ -177,19 +193,52 @@ def _build_filters(context: SessionContext) -> dict:
             filters["title"] = context.anchor.value
 
     # constraints → 메타데이터 필터
+    # 같은 타입이 여러 개 올 수 있으므로 리스트로 수집 후 일괄 등록
+    page_range_list = []
+    pub_year_list   = []
+    author_list     = []
+    nonauthor_list  = []
+    custom_texts    = []
+
     for c in slots.constraints:
         if c.type == "page_range" and c.operator and c.value:
-            filters["page_range"] = {
+            page_range_list.append({
                 "operator": c.operator.value,
                 "value"   : c.value,
-            }
+            })
         elif c.type == "pub_year" and c.operator and c.value:
-            filters["pub_year"] = {
+            pub_year_list.append({
                 "operator": c.operator.value,
                 "value"   : c.value,
-            }
-        elif c.type == "target_reader":
+            })
+        elif c.type == "target_reader" and c.value:
             filters["target_reader"] = c.value
+        elif c.type == "author" and c.value:
+            # 포함할 작가 — 여러 명 가능
+            author_list.append(str(c.value))
+        elif c.type == "nonauthor" and c.value:
+            # 제외할 작가 — 여러 명 가능
+            nonauthor_list.append(str(c.value))
+        elif c.type == "availability":
+            pass  # availability_required 플래그로 별도 처리
+        elif c.type == "custom" and c.value:
+            custom_texts.append(str(c.raw or c.value))
+
+    # 리스트가 있을 때만 filters에 추가
+    if page_range_list:
+        filters["page_range"] = page_range_list
+
+    if pub_year_list:
+        filters["pub_year"] = pub_year_list
+
+    if author_list:
+        filters["author_include"] = author_list
+
+    if nonauthor_list:
+        filters["author_exclude"] = nonauthor_list
+
+    if custom_texts:
+        filters["custom_constraints"] = custom_texts
 
     return filters
 
@@ -226,6 +275,14 @@ def _fallback_keywords(context: SessionContext) -> list[str]:
     if slots.mood.is_filled():
         keywords.append(str(slots.mood.value))
 
+    # constraints 키워드 추가
+    # custom: 자연어 그대로 / author: 검색 키워드로 포함
+    for c in slots.constraints:
+        if c.type == "custom" and c.raw:
+            keywords.append(c.raw)
+        elif c.type == "author" and c.value:
+            keywords.append(str(c.value))
+
     return keywords[:7]  # 최대 7개
 
 
@@ -238,6 +295,11 @@ def _apply_refinement(
     Refinement 요청을 기존 쿼리에 반영합니다.
 
     P7 결론: 처음부터 재생성 X, 이전 쿼리 + 수정 사항만 반영
+
+    TODO (데모 이후 개선):
+        - constraints 변경 반영 (author/nonauthor/page_range 등)
+        - LLM 호출로 더 자연스러운 쿼리 수정
+        - 현재는 reading_level + 분량 키워드만 단순 처리
     """
     # 단순 문자열 조합 (추후 LLM으로 개선 가능)
     additions = []
