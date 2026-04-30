@@ -3,170 +3,194 @@
 # app/services/chat_service.py
 #
 # 변경 이력:
-#   v0.1 - 최초 작성
-#   v0.2 - [FIX] LLMCallError 를 라우터까지 전파하도록 re-raise 추가
-#           (기존: except 에서 잡아서 일반 응답으로 처리 → 503 반환 안 됨)
-#   v0.3 - LLMCallError 폴백 메시지를 ChatResponse 로 감싸서 반환하는 방식으로 변경
-#           (프론트가 항상 동일한 응답 구조를 받을 수 있도록)
+#   v0.1 - 최초 작성 (단순 의도 분류)
+#   v0.2 - [FIX] LLMCallError 전파 방식 수정
+#   v0.3 - 전면 재작성: slot 기반 파이프라인으로 변경
+#          P1~P7 토론 결과 전부 반영
 # ============================================================
 """
-ChatService: 파이프라인 오케스트레이션 레이어
+ChatService: slot 기반 파이프라인 오케스트레이션
 
-역할:
-    API 라우터(chat.py) 와 AI 모듈(intent_extractor 등) 을 연결합니다.
-    파이프라인 전체 흐름을 여기서 관리합니다.
-
-현재 파이프라인:
+파이프라인:
     사용자 질의
-      → [M1] 의도 추출 (intent_extractor)
-      → 추가 질문 필요? → Yes : 질문 반환
-                        → No  : RAG 필요? → Yes : search_query 반환
-                                           → No  : 일반 응답 반환
+      → [1] slot 추출 (LLM)
+      → [2] RAG 준비 여부 판단
+          → 준비 완료 : RAG 쿼리 생성 → 반환
+          → 준비 미완료: session question 생성 → 반환
+      → [3] 사용자 답변으로 slot 업데이트 (멀티턴)
+      → [4] Refinement 처리
 
-나중에 추가할 단계 (TODO):
-    → [Retrieval] Dense/BM25 하이브리드 검색
-    → [Reranker]  결과 재순위
-    → [M4]        도서 설명 생성
+멀티턴 처리:
+    컨텍스트 객체를 매 턴 프론트에서 받아서 업데이트 후 반환
+    세션 저장소 없이 stateless 로 동작 (데모 버전)
 """
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from app.core.exceptions import LLMCallError
-from app.modules.llm.intent_extractor import (
-    extract_intent,
-    is_rag_required,
-    needs_clarification,
+from app.modules.slot.filler import extract_slots, get_slots_to_ask, is_ready_for_rag
+from app.modules.slot.question_generator import (
+    SessionQuestion,
+    apply_choice,
+    generate_question,
 )
-from app.schemas.chat import ChatRequest, ChatResponse, ExtractedIntent, IntentType
+from app.modules.slot.rag_query_builder import build_rag_query
+from app.modules.slot.schema import SessionContext
+from app.schemas.chat_schema import ChatRequest, SlotChatResponse
 
 logger = logging.getLogger(__name__)
 
-# ── 응답 메시지 템플릿 ─────────────────────────────────────────
-
-_TEMPLATES = {
-    IntentType.book_recommendation: (
-        "좋아요! '{query}' 관련 도서를 찾아볼게요. 잠시만 기다려 주세요 📚"
-    ),
-    IntentType.book_info: "'{query}' 에 대한 정보를 찾아볼게요!",
-}
-
-_GENERAL_RESPONSE = (
-    "안녕하세요! 저는 도서관 맞춤 도서 추천 도우미입니다. "
-    "읽고 싶은 책의 장르나 주제를 알려주시면 딱 맞는 책을 찾아드릴게요 📖"
-)
-
-_ERROR_RESPONSE = (
-    "죄송해요, 일시적인 오류가 발생했어요. 잠시 후 다시 시도해 주세요."
-)
-
 
 class ChatService:
-    """
-    채팅 요청 하나를 처리하는 서비스 클래스.
 
-    클래스로 만드는 이유:
-        나중에 DB 세션, 캐시 클라이언트 등 의존성이 추가될 때
-        __init__ 으로 주입받기 쉬움.
-    """
-
-    async def handle(self, request: ChatRequest) -> ChatResponse:
+    async def handle(self, request: ChatRequest) -> SlotChatResponse:
         """
-        메인 파이프라인 진입점.
+        메인 파이프라인 진입점
 
-        Args:
-            request: ChatRequest (query + history + user_profile)
-
-        Returns:
-            ChatResponse — 항상 동일한 구조로 반환 (에러 포함)
+        매 턴마다:
+            1. 컨텍스트 복원 (프론트에서 받음)
+            2. 사용자 발화로 slot 업데이트
+            3. 선택지 응답이면 apply_choice
+            4. RAG 준비 여부 판단
+            5. 응답 반환
         """
-        # ConversationMessage 리스트 → dict 리스트 변환 (모듈 레이어에 전달용)
-        history_dicts: list[dict[str, Any]] = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in request.history
+        history = [
+            {"role": m.role.value, "content": m.content}
+            for m in request.history
         ]
 
-        # ── Step 1: 의도 추출 (M1) ────────────────────────────
-        try:
-            intent = await extract_intent(
-                query=request.query,
-                history=history_dicts,
-                user_profile=request.user_profile,
+        # 컨텍스트 복원 또는 신규 생성
+        context = self._restore_or_create_context(request)
+
+        # 선택지 응답 처리 (사용자가 버튼 선택)
+        if request.selected_choice and request.pending_slots:
+            context = apply_choice(
+                context    = context,
+                choice     = request.selected_choice,
+                asked_slots= request.pending_slots,
             )
-        except LLMCallError as e:
-            # [FIX v0.3] LLM 호출 실패 시 구조화된 에러 응답 반환
-            logger.error("LLM 호출 실패: %s", e)
-            fallback = ExtractedIntent(
-                intent_type=IntentType.general_chat,
-                confidence=0.0,
-            )
-            return ChatResponse(
-                needs_clarification=False,
-                intent=fallback,
-                message=_ERROR_RESPONSE,
-                ready_for_rag=False,
-            )
+            logger.info("선택지 응답 반영: %s", request.selected_choice)
 
-        logger.info(
-            "의도 추출 완료: type=%s confidence=%.2f query='%s'",
-            intent.intent_type,
-            intent.confidence,
-            request.query[:50],
+        else:
+            # 자유 발화 → slot 추출
+            try:
+                context = await extract_slots(
+                    query   = request.query,
+                    context = context,
+                    history = history,
+                )
+            except LLMCallError as e:
+                logger.error("slot 추출 실패: %s", e)
+                return self._error_response(context, str(e))
+
+        # RAG 준비 여부 판단
+        if is_ready_for_rag(context):
+            return await self._build_rag_response(context)
+
+        # session question 생성
+        slots_to_ask = get_slots_to_ask(context)
+
+        if not slots_to_ask:
+            return await self._build_rag_response(context)
+
+        question = await generate_question(
+            slots_to_ask = slots_to_ask,
+            context      = context,
         )
 
-        # ── Step 2: 의도별 분기 ────────────────────────────────
-        if needs_clarification(intent):
-            return self._build_clarification_response(intent)
+        return self._build_question_response(context, question, slots_to_ask)
 
-        if intent.intent_type == IntentType.general_chat:
-            return self._build_general_response(intent)
-
-        # book_recommendation / book_info → RAG 준비 완료
-        return self._build_rag_ready_response(request.query, intent)
-
-    # ── 응답 빌더 ─────────────────────────────────────────────
-
-    def _build_clarification_response(self, intent: ExtractedIntent) -> ChatResponse:
-        """추가 질문이 필요할 때의 응답을 만듭니다."""
-        question = (
-            intent.clarification_question
-            or "어떤 종류의 책을 찾고 계신가요? 좋아하는 장르나 주제를 알려주세요!"
-        )
-        return ChatResponse(
-            needs_clarification=True,
-            clarification_question=question,
-            intent=intent,
-            message=question,
-            ready_for_rag=False,
-        )
-
-    def _build_general_response(self, intent: ExtractedIntent) -> ChatResponse:
-        """일반 대화 응답을 만듭니다."""
-        return ChatResponse(
-            needs_clarification=False,
-            intent=intent,
-            message=_GENERAL_RESPONSE,
-            ready_for_rag=False,
-        )
-
-    def _build_rag_ready_response(
-        self, original_query: str, intent: ExtractedIntent
-    ) -> ChatResponse:
+    def _restore_or_create_context(self, request: ChatRequest) -> SessionContext:
         """
-        RAG 검색 준비가 완료된 응답을 만듭니다.
-        M1 이 정제한 search_query 를 우선 사용하고, 없으면 원본 쿼리 사용.
-        """
-        search_query = intent.search_query or original_query
-        template = _TEMPLATES.get(intent.intent_type, "관련 도서를 찾아볼게요!")
-        message = template.format(query=search_query)
+        프론트에서 넘어온 컨텍스트를 복원하거나 새로 생성
 
-        return ChatResponse(
-            needs_clarification=False,
-            intent=intent,
-            message=message,
-            ready_for_rag=True,
-            search_query=search_query,
+        데모 버전: stateless (컨텍스트를 프론트에서 관리)
+        실서비스: Redis 등 세션 저장소 사용 권장
+        """
+        if request.context:
+            try:
+                return SessionContext(**request.context)
+            except Exception as e:
+                logger.warning("컨텍스트 복원 실패, 신규 생성: %s", e)
+
+        return SessionContext(original_query=request.query)
+
+    async def _build_rag_response(self, context: SessionContext) -> SlotChatResponse:
+        """RAG 준비 완료 응답"""
+        rag_query = await build_rag_query(context)
+        context.rag_query = rag_query
+
+        filled  = context.slots.get_filled_slots()
+        message = f"좋아요! {_describe_slots(context)} 관련 도서를 찾아볼게요 📚"
+
+        return SlotChatResponse(
+            needs_clarification = False,
+            ready_for_rag       = True,
+            message             = message,
+            rag_query           = rag_query,
+            context             = context.model_dump(),
+            filled_slots        = filled,
+        )
+
+    def _build_question_response(
+        self,
+        context     : SessionContext,
+        question    : Optional[SessionQuestion],
+        slots_to_ask: list[str],
+    ) -> SlotChatResponse:
+        """추가 질문 응답"""
+        if not question:
+            return self._error_response(context, "질문 생성 실패")
+
+        return SlotChatResponse(
+            needs_clarification    = True,
+            ready_for_rag          = False,
+            message                = question.question,
+            clarification_question = question.question,
+            clarification_choices  = question.choices,
+            pending_slots          = slots_to_ask,
+            context                = context.model_dump(),
+            filled_slots           = context.slots.get_filled_slots(),
+        )
+
+    def _error_response(
+        self, context: SessionContext, error: str
+    ) -> SlotChatResponse:
+        """에러 응답"""
+        return SlotChatResponse(
+            needs_clarification = False,
+            ready_for_rag       = False,
+            message             = "죄송해요, 일시적인 오류가 발생했어요. 다시 시도해 주세요.",
+            context             = context.model_dump(),
+            filled_slots        = [],
+            error               = error,
         )
 
 
-# 싱글턴 인스턴스 — 라우터에서 import 해서 재사용
+def _describe_slots(context: SessionContext) -> str:
+    """채워진 slot을 자연어로 요약"""
+    parts = []
+    slots = context.slots
+
+    if slots.topic.fine:
+        parts.append(', '.join(slots.topic.fine))
+    elif slots.topic.coarse:
+        parts.append(', '.join(slots.topic.coarse))
+
+    if slots.purpose.is_filled():
+        parts.append(str(slots.purpose.value))
+
+    if slots.reading_level.is_filled():
+        from app.modules.slot.rag_query_builder import _LEVEL_LABEL
+        label = _LEVEL_LABEL.get(slots.reading_level.value, "")
+        if label:
+            parts.append(label)
+
+    if context.anchor:
+        parts.append(f"{context.anchor.value} 관련")
+
+    return " · ".join(parts) if parts else "요청하신 조건"
+
+
+# 싱글턴
 chat_service = ChatService()
