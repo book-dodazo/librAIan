@@ -104,11 +104,14 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
     slots = context.slots
 
     # ── topic ─────────────────────────────────────────────────
+    # [FIX] LLM이 멀티턴에서 str로 반환하는 경우 방어 처리
     # fine/subject 가 단일 str 또는 list 로 올 수 있으므로 항상 리스트로 정규화
-    raw_topic  = raw.get("topic", {}) or {}
-    fine_raw   = raw_topic.get("fine")
-    subject_raw= raw_topic.get("subject")
-    source     = _parse_source(raw_topic.get("source"))
+    raw_topic = raw.get("topic", {}) or {}
+    if isinstance(raw_topic, str):
+        raw_topic = {"fine": [raw_topic], "source": "direct"}
+    fine_raw    = raw_topic.get("fine")
+    subject_raw = raw_topic.get("subject")
+    source      = _parse_source(raw_topic.get("source"))
 
     fine_list   = _to_list(fine_raw)
     subject_list= _to_list(subject_raw)
@@ -132,7 +135,10 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
             )
 
     # ── purpose ───────────────────────────────────────────────
+    # [FIX] LLM이 멀티턴에서 {"value":..,"source":..} 대신 "실용" 같은 str로 반환하는 경우 방어
     raw_purpose = raw.get("purpose", {}) or {}
+    if isinstance(raw_purpose, str):
+        raw_purpose = {"value": raw_purpose, "source": "direct"}
     purpose_val = raw_purpose.get("value")
     purpose_src = _parse_source(raw_purpose.get("source"))
 
@@ -147,7 +153,10 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
             logger.warning("알 수 없는 purpose 값: %s", purpose_val)
 
     # ── reading_level ─────────────────────────────────────────
+    # [FIX] LLM이 멀티턴에서 str로 반환하는 경우 방어
     raw_level = raw.get("reading_level", {}) or {}
+    if isinstance(raw_level, str):
+        raw_level = {"value": raw_level, "source": "direct"}
     level_val = raw_level.get("value")
     level_src = _parse_source(raw_level.get("source"))
 
@@ -162,7 +171,10 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
             logger.warning("알 수 없는 reading_level 값: %s", level_val)
 
     # ── mood ──────────────────────────────────────────────────
+    # [FIX] LLM이 멀티턴에서 str로 반환하는 경우 방어
     raw_mood = raw.get("mood", {}) or {}
+    if isinstance(raw_mood, str):
+        raw_mood = {"value": raw_mood, "source": "direct"}
     mood_val = raw_mood.get("value")
     mood_src = _parse_source(raw_mood.get("source"))
 
@@ -171,7 +183,10 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
         logger.info("mood 채움: %s (%s)", mood_val, mood_src)
 
     # ── anchor ────────────────────────────────────────────────
+    # [FIX] LLM이 멀티턴에서 str로 반환하는 경우 방어
     raw_anchor = raw.get("anchor", {}) or {}
+    if isinstance(raw_anchor, str):
+        raw_anchor = {"value": raw_anchor, "type": "book_title"}
     anchor_val  = raw_anchor.get("value")
     anchor_type = raw_anchor.get("type")
 

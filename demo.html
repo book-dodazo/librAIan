@@ -99,7 +99,16 @@
   .confirm-card strong { display:block; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#92400e; margin-bottom:8px; }
   .confirm-summary { margin-bottom:10px; }
   .confirm-summary li { list-style:none; padding:2px 0; font-size:13px; }
-  .confirm-summary li::before { content:'• '; color:#d97706; }
+  .confirm-summary li::before { content:'• '; }
+  .confirm-summary li.type-inferred { color:#92400e; font-weight:500; }
+  .confirm-summary li.type-inferred::before { color:#f59e0b; }
+  .confirm-summary li.type-direct { color:#1e3a5f; }
+  .confirm-summary li.type-direct::before { color:#3b82f6; }
+  .confirm-summary li.type-constraint { color:#1a3a1a; }
+  .confirm-summary li.type-constraint::before { color:#16a34a; }
+  .confirm-summary li.type-anchor { color:#4c1d95; }
+  .confirm-summary li.type-anchor::before { color:#7c3aed; }
+  .confirm-section-label { font-size:10px; letter-spacing:1px; text-transform:uppercase; margin:8px 0 4px; opacity:0.6; }
   .confirm-choices { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
   .confirm-btn { background:#fff; border:1.5px solid #fde68a; border-radius:20px; color:#713f12; font-family:var(--sans); font-size:12.5px; padding:6px 14px; cursor:pointer; transition:all .18s; }
   .confirm-btn:hover { background:#fef9c3; border-color:#f59e0b; }
@@ -435,9 +444,28 @@
 
     // inferred 확인 카드
     if (data.is_confirmation && data.inferred_summary?.length) {
-      const summaryItems = data.inferred_summary.map(s =>
-        `<li>${escHtml(s.label)}: <strong>${escHtml(String(s.value))}</strong></li>`
-      ).join('');
+      const summary = data.inferred_summary;
+
+      // type별 섹션 분리
+      const byType = { inferred: [], direct: [], constraint: [], anchor: [] };
+      summary.forEach(s => {
+        const t = s.type || 'direct';
+        if (byType[t]) byType[t].push(s);
+      });
+
+      const renderSection = (label, items, typeCls) => {
+        if (!items.length) return '';
+        const lis = items.map(s =>
+          `<li class="type-${typeCls}">${escHtml(s.label)}: <strong>${escHtml(String(s.value))}</strong></li>`
+        ).join('');
+        return `<div class="confirm-section-label">${label}</div><ul class="confirm-summary">${lis}</ul>`;
+      };
+
+      const sectionsHtml =
+        renderSection('추론된 값 (확인 필요)', byType.inferred, 'inferred') +
+        renderSection('명시된 값',             byType.direct,   'direct')   +
+        renderSection('제약 조건',             byType.constraint,'constraint') +
+        renderSection('기준점',               byType.anchor,   'anchor');
 
       const confirmBtns = (data.clarification_choices || []).map(c => {
         const isYes        = c.confirm === true;
@@ -451,7 +479,7 @@
       extra = `
         <div class="confirm-card">
           <strong>파악 내용</strong>
-          <ul class="confirm-summary">${summaryItems}</ul>
+          ${sectionsHtml}
           <div class="confirm-choices">${confirmBtns}</div>
           <div class="restart-row">
             <button class="restart-btn" onclick="restartSession()">🔄 처음부터 다시 시작할게요</button>
@@ -489,9 +517,17 @@
       if (q.keyword_query?.length)        rows.push(['keywords',     q.keyword_query.join(', ')]);
       if (q.filters?.coarse_category?.length) rows.push(['대분류 필터', q.filters.coarse_category.join(', ')]);
       if (q.score_boost?.fine_category?.length) rows.push(['중분류 boost', q.score_boost.fine_category.join(', ')]);
-      if (q.filters?.page_range)          rows.push(['페이지',       `${q.filters.page_range.operator} ${q.filters.page_range.value}`]);
-      if (q.filters?.pub_year)            rows.push(['출판연도',     `${q.filters.pub_year.operator} ${q.filters.pub_year.value}`]);
+      if (q.filters?.page_range?.length)  rows.push(['페이지', q.filters.page_range.map(r => {
+        const op = {'lte':'이하','lt':'미만','gte':'이상','gt':'초과'}[r.operator] || r.operator;
+        return `${r.value}페이지 ${op}`;
+      }).join(', ')]);
+      if (q.filters?.pub_year?.length)    rows.push(['출판연도', q.filters.pub_year.map(r => {
+        const op = {'gte':'이후','lte':'이전','gt':'초과','lt':'미만'}[r.operator] || r.operator;
+        return `${r.value}년 ${op}`;
+      }).join(', ')]);
       if (q.filters?.target_reader)       rows.push(['독자 대상',    q.filters.target_reader]);
+      if (q.filters?.author_include?.length) rows.push(['포함 작가', q.filters.author_include.join(', ')]);
+      if (q.filters?.author_exclude?.length) rows.push(['제외 작가', q.filters.author_exclude.join(', ')]);
       if (q.filters?.custom_constraints?.length) rows.push(['기타 제약', q.filters.custom_constraints.join(', ')]);
       rows.push(['availability', q.availability_required ? '필수' : '기본 반영']);
 

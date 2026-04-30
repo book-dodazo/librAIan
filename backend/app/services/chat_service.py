@@ -208,14 +208,70 @@ class ChatService:
         context : SessionContext,
         inferred: list[tuple[str, str]],  # [(slot_name, value_label), ...]
     ) -> SlotChatResponse:
-        """inferred slot 확인 카드 응답 생성"""
-        # 요약 목록 생성
-        summary = [
-            {"slot": slot, "value": val, "label": _SLOT_LABELS.get(slot, slot)}
+        """
+        확인 카드 응답 생성
+
+        inferred_summary: inferred slot + direct slot + constraints + anchor 전부 포함
+        (데모 버전 — 서비스 레벨에서는 inferred만 표시 권장)
+        """
+        slots = context.slots
+
+        # inferred slot 요약
+        inferred_items = [
+            {"slot": slot, "value": val, "label": _SLOT_LABELS.get(slot, slot), "type": "inferred"}
             for slot, val in inferred
         ]
 
-        # 수정 가능한 slot 선택지 생성
+        # direct slot 요약
+        direct_items = []
+        if slots.topic.is_filled() and slots.topic.source.value == "direct":
+            topic_val = ', '.join(slots.topic.fine) if slots.topic.fine else ', '.join(slots.topic.coarse)
+            direct_items.append({"slot": "topic", "value": topic_val, "label": "주제", "type": "direct"})
+        if slots.purpose.is_filled() and slots.purpose.source.value == "direct":
+            val = slots.purpose.value.value if hasattr(slots.purpose.value, 'value') else str(slots.purpose.value)
+            direct_items.append({"slot": "purpose", "value": val, "label": "목적", "type": "direct"})
+        if slots.reading_level.is_filled() and slots.reading_level.source.value == "direct":
+            raw_val = slots.reading_level.value.value if hasattr(slots.reading_level.value, 'value') else str(slots.reading_level.value)
+            direct_items.append({"slot": "reading_level", "value": _LEVEL_KO.get(raw_val, raw_val), "label": "난이도", "type": "direct"})
+        if slots.mood.is_filled() and slots.mood.source.value == "direct":
+            direct_items.append({"slot": "mood", "value": str(slots.mood.value), "label": "분위기", "type": "direct"})
+
+        # constraints 요약
+        constraint_items = []
+        _OP_KO = {"lte": "이하", "lt": "미만", "gte": "이상", "gt": "초과", "eq": "", "exclude": "제외"}
+        for c in slots.constraints:
+            if c.type == "page_range":
+                op = _OP_KO.get(c.operator.value if c.operator else "", "")
+                constraint_items.append({"slot": "page_range", "value": f"{c.value}{op}", "label": "페이지", "type": "constraint"})
+            elif c.type == "pub_year":
+                op = {"gte": "이후", "lte": "이전"}.get(c.operator.value if c.operator else "", "")
+                constraint_items.append({"slot": "pub_year", "value": f"{c.value}{op}", "label": "출판연도", "type": "constraint"})
+            elif c.type == "author":
+                constraint_items.append({"slot": "author", "value": str(c.value), "label": "포함 작가", "type": "constraint"})
+            elif c.type == "nonauthor":
+                constraint_items.append({"slot": "nonauthor", "value": str(c.value), "label": "제외 작가", "type": "constraint"})
+            elif c.type == "target_reader":
+                constraint_items.append({"slot": "target_reader", "value": str(c.value), "label": "독자 대상", "type": "constraint"})
+            elif c.type == "availability":
+                constraint_items.append({"slot": "availability", "value": "필수", "label": "대출 가능", "type": "constraint"})
+            elif c.type == "custom":
+                constraint_items.append({"slot": "custom", "value": str(c.raw or c.value), "label": "기타", "type": "constraint"})
+
+        # anchor 요약
+        anchor_items = []
+        if context.anchor:
+            type_ko = {"book_title": "책", "author": "작가", "series": "시리즈", "library": "도서관"}
+            anchor_items.append({
+                "slot" : context.anchor.type.value,
+                "value": context.anchor.value,
+                "label": f"기준 {type_ko.get(context.anchor.type.value, '')}",
+                "type" : "anchor",
+            })
+
+        # 전체 요약 합산
+        full_summary = inferred_items + direct_items + constraint_items + anchor_items
+
+        # 수정 가능한 slot 선택지 (inferred만)
         fix_choices = [
             {
                 "label"        : f"{_SLOT_LABELS.get(s, s)} 바꿀게요",
@@ -225,16 +281,16 @@ class ChatService:
             for s, _ in inferred
         ]
 
-        message = _build_confirmation_message(inferred)
+        message = _build_confirmation_message(inferred, context)
 
         return SlotChatResponse(
             needs_clarification = True,
             ready_for_rag       = False,
             is_confirmation     = True,
             message             = message,
-            inferred_summary    = summary,
+            inferred_summary    = full_summary,
             clarification_choices = [
-                {"label": "맞아요, 추천해주세요 ✓", "confirm": True,  "pending_slots": []},
+                {"label": "맞아요, 추천해주세요 ✓", "confirm": True, "pending_slots": []},
                 *fix_choices,
             ],
             pending_slots = [s for s, _ in inferred],
@@ -305,20 +361,82 @@ def _get_inferred_slots(context: SessionContext) -> list[tuple[str, str]]:
     slots  = context.slots
     result = []
     if slots.purpose.source == SlotSource.inferred and slots.purpose.is_filled():
-        result.append(("purpose", str(slots.purpose.value)))
+        # [FIX] PurposeValue.교양 → 교양: Enum이면 .value로 꺼내기
+        val = slots.purpose.value.value if hasattr(slots.purpose.value, 'value') else str(slots.purpose.value)
+        result.append(("purpose", val))
     if slots.reading_level.source == SlotSource.inferred and slots.reading_level.is_filled():
-        label = _LEVEL_KO.get(slots.reading_level.value, str(slots.reading_level.value))
+        # [FIX] ReadingLevelValue.easy → 가볍고 쉽게
+        raw_val = slots.reading_level.value.value if hasattr(slots.reading_level.value, 'value') else str(slots.reading_level.value)
+        label = _LEVEL_KO.get(raw_val, raw_val)
         result.append(("reading_level", label))
     if slots.mood.source == SlotSource.inferred and slots.mood.is_filled():
         result.append(("mood", str(slots.mood.value)))
     return result
 
 
-def _build_confirmation_message(inferred: list[tuple[str, str]]) -> str:
+def _build_confirmation_message(
+    inferred: list[tuple[str, str]],
+    context : "SessionContext",
+) -> str:
+    """
+    확인 메시지 생성 — inferred slot + direct slot + constraints + anchor 전부 표시
+    데모 버전: 최대한 다 출력 (서비스 레벨에서는 inferred만 표시 권장)
+    """
     lines = ["이렇게 파악했어요:"]
-    for slot, val in inferred:
-        label = _SLOT_LABELS.get(slot, slot)
-        lines.append(f"  \u2022 {label}: {val}")
+
+    # inferred slot (확인 필요)
+    if inferred:
+        lines.append("  [추론된 값 — 확인 필요]")
+        for slot, val in inferred:
+            label = _SLOT_LABELS.get(slot, slot)
+            lines.append(f"  • {label}: {val}")
+
+    # direct slot (명시된 값)
+    slots = context.slots
+    direct_lines = []
+    if slots.topic.is_filled() and slots.topic.source.value == "direct":
+        topic_val = ', '.join(slots.topic.fine) if slots.topic.fine else ', '.join(slots.topic.coarse)
+        direct_lines.append(f"  • 주제: {topic_val}")
+    if slots.purpose.is_filled() and slots.purpose.source.value == "direct":
+        val = slots.purpose.value.value if hasattr(slots.purpose.value, 'value') else str(slots.purpose.value)
+        direct_lines.append(f"  • 목적: {val}")
+    if slots.reading_level.is_filled() and slots.reading_level.source.value == "direct":
+        raw_val = slots.reading_level.value.value if hasattr(slots.reading_level.value, 'value') else str(slots.reading_level.value)
+        direct_lines.append(f"  • 난이도: {_LEVEL_KO.get(raw_val, raw_val)}")
+    if slots.mood.is_filled() and slots.mood.source.value == "direct":
+        direct_lines.append(f"  • 분위기: {slots.mood.value}")
+    if direct_lines:
+        lines.append("  [명시된 값]")
+        lines.extend(direct_lines)
+
+    # constraints
+    if slots.constraints:
+        lines.append("  [제약 조건]")
+        for c in slots.constraints:
+            if c.type == "page_range":
+                op_ko = {"lte": "이하", "lt": "미만", "gte": "이상", "gt": "초과"}.get(
+                    c.operator.value if c.operator else "", "")
+                lines.append(f"  • 페이지: {c.value}{op_ko}")
+            elif c.type == "pub_year":
+                op_ko = {"gte": "이후", "lte": "이전"}.get(
+                    c.operator.value if c.operator else "", "")
+                lines.append(f"  • 출판연도: {c.value}{op_ko}")
+            elif c.type == "author":
+                lines.append(f"  • 포함 작가: {c.value}")
+            elif c.type == "nonauthor":
+                lines.append(f"  • 제외 작가: {c.value}")
+            elif c.type == "target_reader":
+                lines.append(f"  • 독자 대상: {c.value}")
+            elif c.type == "availability":
+                lines.append(f"  • 대출 가능 필수")
+            elif c.type == "custom":
+                lines.append(f"  • 기타: {c.raw or c.value}")
+
+    # anchor
+    if context.anchor:
+        type_ko = {"book_title": "책", "author": "작가", "series": "시리즈", "library": "도서관"}
+        lines.append(f"  • 기준 {type_ko.get(context.anchor.type.value, '')}: {context.anchor.value}")
+
     lines.append("\n바꾸실 내용이 있으면 알려주세요!")
     return "\n".join(lines)
 
