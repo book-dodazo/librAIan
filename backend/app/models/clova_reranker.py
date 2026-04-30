@@ -450,6 +450,10 @@ def create_payload_and_rerank(
 # --------------------------------------------------
 
 if __name__ == "__main__":
+    from pathlib import Path
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parents[2] / ".env")  # backend/.env
+
     # 1. 재구성된 세션 데이터
     reconstructed_session = {
         "keyword_query": ["SF", "소설", "재미", "가벼운", "힐링"],
