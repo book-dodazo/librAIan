@@ -191,6 +191,12 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Local database dumps / generated DB files
+backend/app/db/*.sql
+backend/app/db/*.dump
+backend/app/db/*.backup
+backend/app/db/database/
+
 # PyPI configuration file
 .pypirc
 
