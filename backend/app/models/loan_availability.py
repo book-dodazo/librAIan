@@ -185,7 +185,7 @@ if __name__ == "__main__":
     )
 
     # 4. CLOVA API 호출 (없으면 검색 점수 기준 순위만 사용)
-    clova_api_key = os.getenv("CLOVA_STUDIO_API_KEY")  # .env: CLOVA_STUDIO_API_KEY
+    clova_api_key = os.getenv("CLOVA_API_KEY")  # .env: CLOVA_API_KEY
     if clova_api_key:
         clova_response = call_clova_reranker(
             payload=prepared["clova_payload"],
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         )
         reranked_books = final_result["reranked_books"]
     else:
-        print("\nCLOVA_STUDIO_API_KEY 없음 — 검색 점수 순위 기준으로 진행합니다.")
+        print("\nCLOVA_API_KEY 없음 — 검색 점수 순위 기준으로 진행합니다.")
         reranked_books = [
             {
                 "isbn": c["isbn"],

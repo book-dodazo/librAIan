@@ -495,9 +495,9 @@ if __name__ == "__main__":
     # print(json.dumps(prepared["clova_payload"], ensure_ascii=False, indent=2))
 
     # 4. 실제 API 호출 예시
-    api_key = os.getenv("CLOVA_STUDIO_API_KEY")
+    api_key = os.getenv("CLOVA_API_KEY")
     if not api_key:
-        print("\nCLOVA_STUDIO_API_KEY가 없어 실제 API 호출은 건너뜁니다.")
+        print("\nCLOVA_API_KEY가 없어 실제 API 호출은 건너뜁니다.")
         raise SystemExit(0)
 
     clova_response = call_clova_reranker(
