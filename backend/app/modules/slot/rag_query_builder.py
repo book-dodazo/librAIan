@@ -13,6 +13,12 @@
 #          [FIX] _summarize_slots author/nonauthor 누락 수정
 #          [FIX] _fallback_keywords author 키워드 누락 수정
 #          TODO 주석 추가 (_apply_refinement 미완성 명시)
+#   v0.4 - [FIX] A파트 BM25.py 키 이름 맞춤
+#          author_include → constraints["author"]
+#          author_exclude → constraints["author_non"]
+#          page_range     → constraints["page_range"]
+#          pub_year       → constraints["pub_year"]
+#          filters에는 coarse_category, target_reader, custom_constraints만 유지
 # ============================================================
 """
 RAG 쿼리 빌더
@@ -104,8 +110,11 @@ async def build_rag_query(context: SessionContext) -> dict[str, Any]:
         keyword_query  = _fallback_keywords(context)
         semantic_query = context.original_query
 
-    # ── 메타데이터 필터 생성 ──────────────────────────────────
-    filters = _build_filters(context)
+    # ── 메타데이터 필터 + constraints 생성 ──────────────────────
+    # _build_filters 가 {"filters": {...}, "constraints": {...}} 형태로 반환
+    filter_result = _build_filters(context)
+    filters     = filter_result["filters"]
+    constraints = filter_result["constraints"]
 
     # ── score_boost 생성 ──────────────────────────────────────
     score_boost = _build_score_boost(context)
@@ -122,7 +131,8 @@ async def build_rag_query(context: SessionContext) -> dict[str, Any]:
     rag_query = {
         "keyword_query"        : keyword_query,
         "semantic_query"       : semantic_query,
-        "filters"              : filters,
+        "filters"              : filters,       # coarse_category, target_reader 등
+        "constraints"          : constraints,   # author, author_non, page_range, pub_year
         "score_boost"          : score_boost,
         "availability_required": slots.availability_required,
         "anchor"               : _anchor_to_dict(context),
@@ -177,11 +187,20 @@ def _summarize_slots(context: SessionContext) -> str:
 
 
 def _build_filters(context: SessionContext) -> dict:
-    """메타데이터 필터 생성"""
-    filters: dict[str, Any] = {}
+    """
+    메타데이터 필터 생성
+
+    반환 구조 (A파트 BM25.py 키 이름 기준):
+        filters     : coarse_category, target_reader, custom_constraints, anchor 관련
+        constraints : author, author_non, page_range, pub_year
+    """
+    filters    : dict[str, Any] = {}
+    constraints: dict[str, Any] = {}
     slots = context.slots
 
-    # 대분류 필터 (BM25 + Dense 공통) — 리스트로 전달
+    # ── filters ───────────────────────────────────────────────
+
+    # 대분류 필터 (BM25 + Dense 공통)
     if slots.topic.is_filled() and slots.topic.coarse:
         filters["coarse_category"] = slots.topic.coarse  # list[str]
 
@@ -192,13 +211,16 @@ def _build_filters(context: SessionContext) -> dict:
         elif context.anchor.type == AnchorType.book_title:
             filters["title"] = context.anchor.value
 
-    # constraints → 메타데이터 필터
-    # 같은 타입이 여러 개 올 수 있으므로 리스트로 수집 후 일괄 등록
-    page_range_list = []
-    pub_year_list   = []
-    author_list     = []
-    nonauthor_list  = []
-    custom_texts    = []
+    # custom 제약 (자연어 — 하드 필터 불가, 후처리용)
+    custom_texts: list[str] = []
+
+    # ── constraints ───────────────────────────────────────────
+    # A파트 BM25.py: constraints["author"], ["author_non"], ["page_range"], ["pub_year"]
+
+    page_range_list: list[dict] = []
+    pub_year_list  : list[dict] = []
+    author_list    : list[str]  = []
+    nonauthor_list : list[str]  = []
 
     for c in slots.constraints:
         if c.type == "page_range" and c.operator and c.value:
@@ -214,33 +236,29 @@ def _build_filters(context: SessionContext) -> dict:
         elif c.type == "target_reader" and c.value:
             filters["target_reader"] = c.value
         elif c.type == "author" and c.value:
-            # 포함할 작가 — 여러 명 가능
             author_list.append(str(c.value))
         elif c.type == "nonauthor" and c.value:
-            # 제외할 작가 — 여러 명 가능
             nonauthor_list.append(str(c.value))
         elif c.type == "availability":
             pass  # availability_required 플래그로 별도 처리
         elif c.type == "custom" and c.value:
             custom_texts.append(str(c.raw or c.value))
 
-    # 리스트가 있을 때만 filters에 추가
+    # constraints 딕셔너리 구성 (값 있을 때만)
     if page_range_list:
-        filters["page_range"] = page_range_list
-
+        constraints["page_range"]  = page_range_list
     if pub_year_list:
-        filters["pub_year"] = pub_year_list
-
+        constraints["pub_year"]    = pub_year_list
     if author_list:
-        filters["author_include"] = author_list
-
+        constraints["author"]      = author_list      # BM25.py: constraints["author"]
     if nonauthor_list:
-        filters["author_exclude"] = nonauthor_list
+        constraints["author_non"]  = nonauthor_list   # BM25.py: constraints["author_non"]
 
+    # custom_constraints는 filters에 유지 (후처리용)
     if custom_texts:
         filters["custom_constraints"] = custom_texts
 
-    return filters
+    return {"filters": filters, "constraints": constraints}
 
 
 def _build_score_boost(context: SessionContext) -> dict:
