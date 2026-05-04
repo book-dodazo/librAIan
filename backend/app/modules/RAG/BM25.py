@@ -23,11 +23,9 @@ embedding_path = app_dir / "db" / "small_category_embeddings.json"
 URL = "https://clovastudio.stream.ntruss.com/testapp/v1/api-tools/embedding/v2/"
 CLOVA_API_KEY = settings.CLOVA_API_KEY
 
-ELASTIC_URL = os.getenv("ELASTIC_URL")
-
-ELASTIC_USER = os.getenv("ELASTIC_USER")
-
-ELASTIC_PASSWORD = os.getenv("ELASTIC_PASSWORD")
+ELASTIC_URL= "https://localhost:9200"
+ELASTIC_USER= "elastic"
+ELASTIC_PASSWORD="120408"
 
 _small_cate_cache = None
 
@@ -162,7 +160,7 @@ def search_bm25_with_cate(
     result,
     small_category_embeddings=get_small_category_embeddings(),
     index_name="book_bm25_no_review",
-    size=10
+    size=20
 ):
     keyword_query = " ".join(result.get("keyword_query", []))
     filters = result.get("filters", {})
@@ -266,7 +264,7 @@ def search_bm25_with_cate(
         "size": size,
         "query": {
             "bool": {
-                "filter": filter_clause,
+                # "filter": filter_clause,
                 "must": [
                     {
                         "multi_match": {
@@ -283,8 +281,8 @@ def search_bm25_with_cate(
                         }
                     }
                 ],
-                "should": should_clause,
-                "must_not": must_not_clause
+                # "should": should_clause,
+                # "must_not": must_not_clause
             }
         }
     }
