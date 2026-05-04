@@ -102,7 +102,7 @@ def run_bm25_search(
     rag_query                : dict[str, Any],
     small_category_embeddings: Optional[dict] = None,
     index_name               : str = "book_bm25_no_review",
-    size                     : int = 10,
+    size                     : int = 20,
 ) -> list[dict]:
     """
     [3단계] BM25 검색 (A파트 연동)
@@ -125,7 +125,7 @@ def run_bm25_search(
         logger.warning("BM25 모듈 없음 (app/modules/RAG/BM25.py) — 검색 스킵")
         return []
     except Exception as e:
-        logger.error("BM25 검색 실패: %s", e)
+        logger.error("BM25 검색 실패: %s", e, exc_info=True)
         return []
 
 
@@ -299,9 +299,10 @@ async def run_full_pipeline(
     )
 
     logger.info(
-        "파이프라인 완료: bm25=%d건 reranked=%d건 availability=%d건",
+        "파이프라인 완료: bm25=%d건 reranked=%d건 availability=%d건 availability result=%s",
         len(result.bm25_results),
         len(result.reranked_results),
         len(result.availability_index),
+        result.availability_index
     )
     return result

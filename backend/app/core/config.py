@@ -32,6 +32,20 @@ class Settings(BaseSettings):
     CLOVA_MODEL: str = "HCX-DASH-002"
     CLOVA_BASE_URL: str = "https://clovastudio.stream.ntruss.com/v1/openai"
 
+    NARU_API_KEY : str = ""
+    NARU_API_URL : str = "http://data4library.kr/api"
+    NARU_LIB_CODE: str = ""
+
+    APP_ENV: str = "development"
+    LOG_LEVEL: str = "INFO"
+
+
+    ELASTIC_URL: str
+
+    ELASTIC_USER: str
+
+    ELASTIC_PASSWORD: str
+
     # ── 앱 일반 ──────────────────────────────────────────────
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
@@ -43,6 +57,7 @@ class Settings(BaseSettings):
     }
 
 
+
 # 모듈 레벨 싱글턴 — 앱 전체에서 import해서 재사용
 settings = Settings()
 
@@ -52,3 +67,4 @@ if not settings.CLOVA_API_KEY:
         "[config] CLOVA_API_KEY 가 설정되지 않았습니다. "
         ".env 파일에 CLOVA_API_KEY=... 를 추가해주세요."
     )
+

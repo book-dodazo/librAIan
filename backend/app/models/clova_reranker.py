@@ -58,10 +58,10 @@ def fetch_books_by_isbn(isbns: List[str]) -> Dict[str, Dict[str, Any]]:
     }
     """
     conn_kwargs: Dict[str, Any] = {
-        "dbname": os.getenv("POSTGRES_DB", "libraian"),
+        "dbname": os.getenv("POSTGRES_DB", "book_db"),
         "host": os.getenv("POSTGRES_HOST", "localhost"),
         "port": os.getenv("POSTGRES_PORT", "5432"),
-        "user": os.getenv("POSTGRES_USER", os.getenv("USER", "")),
+        "user": os.getenv("POSTGRES_USER", os.getenv("USER", "parkdahyeon")),
     }
     password = os.getenv("POSTGRES_PASSWORD", "")
     if password:
