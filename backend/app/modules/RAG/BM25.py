@@ -4,14 +4,47 @@ import uuid
 import time
 import random
 import requests
+from app.core.config import settings
+import os
+from pathlib import Path
+import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
+base = Path(__file__).resolve()
+
+# app 폴더까지
+app_dir = base.parents[2]
+
+embedding_path = app_dir / "db" / "small_category_embeddings.json"
+
 
 URL = "https://clovastudio.stream.ntruss.com/testapp/v1/api-tools/embedding/v2/"
+CLOVA_API_KEY = settings.CLOVA_API_KEY
 
-HEADERS = {
-    "Authorization": f"Bearer {CLOVA_API_KEY}",
-    "X-NCP-CLOVASTUDIO-REQUEST-ID": str(uuid.uuid4()),
-    "Content-Type": "application/json"
-}
+ELASTIC_URL= "https://localhost:9200"
+ELASTIC_USER= "elastic"
+ELASTIC_PASSWORD="120408"
+
+_small_cate_cache = None
+
+def get_small_category_embeddings():
+    global _small_cate_cache
+
+    if _small_cate_cache is None:
+        with open(embedding_path, "r", encoding="utf-8") as f:
+            _small_cate_cache = json.load(f)
+
+    return _small_cate_cache
+
+
+def make_headers():
+    return {
+        "Authorization": f"Bearer {CLOVA_API_KEY}",
+        "X-NCP-CLOVASTUDIO-REQUEST-ID": str(uuid.uuid4()),
+        "Content-Type": "application/json"
+    }
 
 def get_embedding(text, max_retries=10, timeout=30):
     payload = {
@@ -20,7 +53,7 @@ def get_embedding(text, max_retries=10, timeout=30):
 
     for attempt in range(max_retries):
         try:
-            res = requests.post(URL, headers=HEADERS, json=payload, timeout=timeout)
+            res = requests.post(URL, headers=make_headers(), json=payload, timeout=timeout)
 
             if res.status_code == 200:
                 data = res.json()
@@ -42,9 +75,11 @@ def get_embedding(text, max_retries=10, timeout=30):
             print(f"[재시도 {attempt+1}/{max_retries}] {wait:.1f}초 대기 → {e}")
             time.sleep(wait)
 
+
+
 es = Elasticsearch(
-    "https://localhost:9200",
-    basic_auth=("elastic", "120408"),
+    ELASTIC_URL,
+    basic_auth=(ELASTIC_USER, ELASTIC_PASSWORD),
     verify_certs=False
 )
 
@@ -123,9 +158,9 @@ def parse_page_conditions(page_range):
 
 def search_bm25_with_cate(
     result,
-    small_category_embeddings=None,
+    small_category_embeddings=get_small_category_embeddings(),
     index_name="book_bm25_no_review",
-    size=10
+    size=20
 ):
     keyword_query = " ".join(result.get("keyword_query", []))
     filters = result.get("filters", {})
@@ -229,7 +264,7 @@ def search_bm25_with_cate(
         "size": size,
         "query": {
             "bool": {
-                "filter": filter_clause,
+                # "filter": filter_clause,
                 "must": [
                     {
                         "multi_match": {
@@ -246,8 +281,8 @@ def search_bm25_with_cate(
                         }
                     }
                 ],
-                "should": should_clause,
-                "must_not": must_not_clause
+                # "should": should_clause,
+                # "must_not": must_not_clause
             }
         }
     }
