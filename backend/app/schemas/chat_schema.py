@@ -89,6 +89,14 @@ class SlotChatResponse(BaseModel):
     # 멀티턴 컨텍스트
     context               : Optional[dict[str, Any]]= None
 
+    # 검색 결과 (BM25 + Reranking 완료 후 채워짐)
+    # 형태: [{"rank": 1, "isbn": "...", "score": 1.23}, ...]
+    search_results        : Optional[list[dict]]    = None
+
+    # 대출 가능 여부 조회 결과
+    # 형태: {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
+    availability_index    : Optional[dict[str, Any]]= None
+
     # 디버깅
     filled_slots          : list[str]               = Field(default_factory=list)
     error                 : Optional[str]           = None

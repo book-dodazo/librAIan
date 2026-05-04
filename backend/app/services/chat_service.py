@@ -9,6 +9,9 @@
 #          P1~P7 토론 결과 전부 반영
 #   v0.4 - inferred 확인 턴 추가
 #          inferred slot이 하나라도 있으면 확인 질문 후 RAG 진행
+#   v0.5 - 파이프라인 단계 분리 (pipeline.py)
+#          _build_rag_response → run_full_pipeline() 호출로 변경
+#          BM25/reranker 연동을 pipeline.py에서 관리
 # ============================================================
 """
 ChatService: slot 기반 파이프라인 오케스트레이션
@@ -36,9 +39,9 @@ from app.modules.slot.question_generator import (
     apply_choice,
     generate_question,
 )
-from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext, SlotSource
 from app.schemas.chat_schema import ChatRequest, SlotChatResponse
+from app.services.pipeline import run_full_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -131,20 +134,31 @@ class ChatService:
         return SessionContext(original_query=request.query)
 
     async def _build_rag_response(self, context: SessionContext) -> SlotChatResponse:
-        """RAG 준비 완료 응답"""
-        rag_query = await build_rag_query(context)
-        context.rag_query = rag_query
+        """
+        RAG 파이프라인 실행 및 응답 생성
+
+        pipeline.py의 run_full_pipeline()을 호출해서
+        RAG 쿼리 생성 → BM25 검색 → Reranking 순으로 실행합니다.
+
+        새 단계 추가/변경은 pipeline.py에서 하면 됩니다.
+        """
+        pipeline_result = await run_full_pipeline(context)
+
+        # 컨텍스트에 rag_query 저장 (Refinement에서 재사용)
+        context.rag_query = pipeline_result.rag_query
 
         filled  = context.slots.get_filled_slots()
         message = f"좋아요! {_describe_slots(context)} 관련 도서를 찾아볼게요 📚"
 
         return SlotChatResponse(
-            needs_clarification = False,
-            ready_for_rag       = True,
-            message             = message,
-            rag_query           = rag_query,
-            context             = context.model_dump(),
-            filled_slots        = filled,
+            needs_clarification  = False,
+            ready_for_rag        = True,
+            message              = message,
+            rag_query            = pipeline_result.rag_query,
+            search_results       = pipeline_result.final_results,
+            availability_index   = pipeline_result.availability_index or None,
+            context              = context.model_dump(),
+            filled_slots         = filled,
         )
 
     def _build_question_response(
