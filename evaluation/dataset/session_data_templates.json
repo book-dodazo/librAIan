@@ -1,0 +1,452 @@
+{
+  "metadata": {
+    "version": "0.1-draft",
+    "created_by": "심소민",
+    "corpus": "1800권 샘플 (카테고리별 20% 균등 추출)",
+    "total": 21,
+    "note": "hint_turns = 박정현이 설계할 대화 턴 수 목표. original_query = 첫 발화 힌트 (확정 아님). slots = 모든 대화가 끝난 최종 상태. query_type 7종 × 3개."
+  },
+  "templates": [
+
+    {
+      "template_id": "T004",
+      "query_type": "anchor_based",
+      "hint_turns": 1,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P001-B",
+      "original_query": "채식주의자 같은데 좀 더 가볍게 읽을 수 있는 책 추천해줘",
+      "anchor": { "value": "채식주의자", "type": "book_title" },
+      "slots": {
+        "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": [], "source": "inferred" },
+        "purpose": { "value": null, "source": "null" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null
+    },
+
+    {
+      "template_id": "T005",
+      "query_type": "anchor_based",
+      "hint_turns": 2,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P002-B",
+      "original_query": "제로 투 원 같은 경영서인데 300페이지 이하로 추천해줘",
+      "anchor": { "value": "제로 투 원", "type": "book_title" },
+      "slots": {
+        "topic": { "coarse": ["경제/경영"], "fine": ["경영전략"], "subject": [], "source": "inferred" },
+        "purpose": { "value": "학습", "source": "inferred" },
+        "reading_level": { "value": null, "source": "null" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [
+          { "type": "page_range", "value": 300, "operator": "lte", "raw": "300페이지 이하" }
+        ],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "anchor + constraint 1턴 추출 → inferred purpose 확인 2턴"
+    },
+
+    {
+      "template_id": "T006",
+      "query_type": "anchor_based",
+      "hint_turns": 2,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P004-B",
+      "original_query": "코스모스처럼 재미있게 읽을 수 있는 과학책 추천해줘",
+      "anchor": { "value": "코스모스", "type": "book_title" },
+      "slots": {
+        "topic": { "coarse": ["과학"], "fine": ["교양과학"], "subject": [], "source": "inferred" },
+        "purpose": { "value": "재미", "source": "direct" },
+        "reading_level": { "value": "medium", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "anchor + purpose(재미) 1턴 추출 → reading_level 질문 2턴"
+    },
+
+    {
+      "template_id": "T007",
+      "query_type": "topic_purpose",
+      "hint_turns": 1,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P002-C",
+      "original_query": "심리학 공부하고 싶은데 입문서 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["인문"], "fine": ["심리학"], "subject": [], "source": "direct" },
+        "purpose": { "value": "학습", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "inferred" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "'입문서' → reading_level easy inferred. 1턴으로 ready_for_rag 진입"
+    },
+
+    {
+      "template_id": "T008",
+      "query_type": "topic_purpose",
+      "hint_turns": 1,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P001-C",
+      "original_query": "재미있는 한국소설 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "direct" },
+        "reading_level": { "value": null, "source": "null" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null
+    },
+
+    {
+      "template_id": "T009",
+      "query_type": "topic_purpose",
+      "hint_turns": 1,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P002-A",
+      "original_query": "업무 효율 높이는 실용적인 자기계발서 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["자기계발"], "fine": ["비즈니스능력계발"], "subject": ["업무효율"], "source": "direct" },
+        "purpose": { "value": "실용", "source": "direct" },
+        "reading_level": { "value": null, "source": "null" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null
+    },
+
+    {
+      "template_id": "T010",
+      "query_type": "topic_constraint",
+      "hint_turns": 1,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P004-A",
+      "original_query": "SF 소설 추천해줘, 300페이지 이하로",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["소설"], "fine": ["장르소설"], "subject": ["SF"], "source": "direct" },
+        "purpose": { "value": "재미", "source": "inferred" },
+        "reading_level": { "value": null, "source": "null" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [
+          { "type": "page_range", "value": 300, "operator": "lte", "raw": "300페이지 이하" }
+        ],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "topic + constraint 1턴 직접 추출. purpose inferred(재미). ready_for_rag 진입"
+    },
+
+    {
+      "template_id": "T011",
+      "query_type": "topic_constraint",
+      "hint_turns": 2,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P002-B",
+      "original_query": "최근 5년 이내 나온 경제 트렌드 책 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["경제/경영"], "fine": ["경제일반"], "subject": ["경제트렌드"], "source": "direct" },
+        "purpose": { "value": "교양", "source": "inferred" },
+        "reading_level": { "value": "medium", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [
+          { "type": "pub_year", "value": 2021, "operator": "gte", "raw": "최근 5년 이내" }
+        ],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "topic + pub_year 1턴. reading_level 질문 2턴. pub_year 기준: 2026-5=2021"
+    },
+
+    {
+      "template_id": "T012",
+      "query_type": "topic_constraint",
+      "hint_turns": 2,
+      "data_usage_case": "session_only",
+      "assigned_persona": "P001-A",
+      "original_query": "에세이 추천해줘, 번역서 말고 한국 작가 거로",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["시/에세이"], "fine": ["테마에세이"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "inferred" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [
+          { "type": "nonauthor", "value": "번역서", "operator": "exclude", "raw": "번역서 말고 한국 작가 거로" }
+        ],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "topic + nonauthor 1턴. reading_level 질문 2턴"
+    },
+
+    {
+      "template_id": "T013",
+      "query_type": "pure_topic",
+      "hint_turns": 2,
+      "data_usage_case": "session_plus_onboarding_rerank",
+      "assigned_persona": "P002-C",
+      "original_query": "철학 책 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["인문"], "fine": ["철학"], "subject": [], "source": "direct" },
+        "purpose": { "value": "교양", "source": "direct" },
+        "reading_level": { "value": "medium", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "topic만 1턴. purpose 질문 → '교양' 2턴. reading_level inferred or 확인"
+    },
+
+    {
+      "template_id": "T014",
+      "query_type": "pure_topic",
+      "hint_turns": 2,
+      "data_usage_case": "session_plus_onboarding_rerank",
+      "assigned_persona": "P003-A",
+      "original_query": "건강 관련 책 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["건강"], "fine": ["건강일반"], "subject": [], "source": "direct" },
+        "purpose": { "value": "실용", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "topic만 1턴. purpose 질문 → '실용(건강관리)' 2턴. reading_level: 67세 → easy inferred"
+    },
+
+    {
+      "template_id": "T015",
+      "query_type": "pure_topic",
+      "hint_turns": 2,
+      "data_usage_case": "session_plus_onboarding_rerank",
+      "assigned_persona": "P004-C",
+      "original_query": "장르소설 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["소설"], "fine": ["장르소설"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "direct" },
+        "reading_level": { "value": "medium", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "topic만 1턴. purpose 질문 → '재미' 2턴. reading_level: 17세 → medium"
+    },
+
+    {
+      "template_id": "T016",
+      "query_type": "pure_mood_state",
+      "hint_turns": 3,
+      "data_usage_case": "session_plus_onboarding_rerank",
+      "assigned_persona": "P001-A",
+      "original_query": "요즘 너무 지쳐있어서 뭔가 읽고 싶어",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "inferred" },
+        "mood": { "value": "지쳐있음, 무기력함", "source": "direct" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "mood 1턴 → topic 질문 2턴 → purpose 질문(or inferred 확인) 3턴"
+    },
+
+    {
+      "template_id": "T017",
+      "query_type": "pure_mood_state",
+      "hint_turns": 2,
+      "data_usage_case": "session_plus_onboarding_rerank",
+      "assigned_persona": "P003-B",
+      "original_query": "요즘 좀 외롭고 위로받고 싶어서",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["시/에세이"], "fine": ["테마에세이"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "inferred" },
+        "reading_level": { "value": "easy", "source": "inferred" },
+        "mood": { "value": "외로움, 위로가 필요함", "source": "direct" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "mood 1턴 → topic 질문 2턴. onboarding(시/에세이 선호)로 topic 후보 제안. purpose/reading_level inferred"
+    },
+
+    {
+      "template_id": "T018",
+      "query_type": "pure_mood_state",
+      "hint_turns": 3,
+      "data_usage_case": "session_plus_onboarding_rerank",
+      "assigned_persona": "P005-A",
+      "original_query": "요즘 삶의 방향을 잃은 것 같아서 뭔가 읽어보고 싶어",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["시/에세이"], "fine": ["테마에세이"], "subject": [], "source": "direct" },
+        "purpose": { "value": "교양", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": "무기력, 삶의 방향을 잃은 느낌", "source": "direct" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "mood 1턴 → topic 질문 2턴 → purpose/reading_level 질문 3턴. P005-A 독서 비경험자 → easy"
+    },
+
+    {
+      "template_id": "T019",
+      "query_type": "availability_first",
+      "hint_turns": 2,
+      "data_usage_case": "availability_from_onboarding_location",
+      "assigned_persona": "P001-B",
+      "original_query": "지금 당장 빌릴 수 있는 한국소설 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "inferred" },
+        "reading_level": { "value": null, "source": "null" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": true
+      },
+      "availability_expectation": {
+        "library": "서대문구립이진아기념도서관",
+        "mode": "strict",
+        "top1_rerank_available": false,
+        "expected_output_structure": "available_top3"
+      },
+      "_hint": "'지금 당장' → mode=strict. topic+availability 1턴 직접 추출. reading_level 질문 2턴"
+    },
+
+    {
+      "template_id": "T020",
+      "query_type": "availability_first",
+      "hint_turns": 2,
+      "data_usage_case": "availability_from_onboarding_location",
+      "assigned_persona": "P002-A",
+      "original_query": "자기계발서 추천해줘, 도서관에서 빌릴 수 있는 걸로",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["자기계발"], "fine": ["자기능력계발"], "subject": [], "source": "direct" },
+        "purpose": { "value": "실용", "source": "inferred" },
+        "reading_level": { "value": null, "source": "null" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": true
+      },
+      "availability_expectation": {
+        "library": "수원시립중앙도서관",
+        "mode": "standard",
+        "top1_rerank_available": true,
+        "expected_output_structure": "available_top3"
+      },
+      "_hint": "'도서관에서 빌릴 수 있는' → mode=standard. 리랭킹 1등이 대출 가능한 케이스(Scenario A)"
+    },
+
+    {
+      "template_id": "T021",
+      "query_type": "availability_first",
+      "hint_turns": 2,
+      "data_usage_case": "availability_from_onboarding_location",
+      "assigned_persona": "P003-A",
+      "original_query": "에세이 추천해줘, 대출 가능한 거로",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["시/에세이"], "fine": ["인물/자전적에세이"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "inferred" },
+        "reading_level": { "value": "easy", "source": "inferred" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": true
+      },
+      "availability_expectation": {
+        "library": "은평구립도서관",
+        "mode": "standard",
+        "top1_rerank_available": false,
+        "expected_output_structure": "available_top3_plus_best"
+      },
+      "_hint": "'대출 가능한' → mode=standard. 리랭킹 1등이 대출 불가한 케이스(Scenario B) → best 책 추가 출력"
+    },
+
+    {
+      "template_id": "T022",
+      "query_type": "broad_ambiguous",
+      "hint_turns": 3,
+      "data_usage_case": "onboarding_for_ambiguous_query",
+      "assigned_persona": "P005-C",
+      "original_query": "뭔가 읽고 싶은데 뭘 읽어야 할지 모르겠어",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["시/에세이"], "fine": ["테마에세이"], "subject": [], "source": "direct" },
+        "purpose": { "value": "재미", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "1턴: 거의 null → onboarding(소설/에세이 선호)으로 topic 후보 제안 → 2턴: topic 선택 → 3턴: purpose/reading_level"
+    },
+
+    {
+      "template_id": "T023",
+      "query_type": "broad_ambiguous",
+      "hint_turns": 3,
+      "data_usage_case": "onboarding_for_ambiguous_query",
+      "assigned_persona": "P003-C",
+      "original_query": "오랜만에 책 읽어보고 싶어서요",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["건강"], "fine": ["건강일반"], "subject": [], "source": "direct" },
+        "purpose": { "value": "실용", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "71세 페르소나. 1턴: 거의 null → onboarding(건강/에세이 선호)으로 topic 제안 → 건강으로 수렴"
+    },
+
+    {
+      "template_id": "T024",
+      "query_type": "broad_ambiguous",
+      "hint_turns": 3,
+      "data_usage_case": "onboarding_for_ambiguous_query",
+      "assigned_persona": "P003-B",
+      "original_query": "요즘 뭔가 읽어야 할 것 같아서 추천해줘",
+      "anchor": null,
+      "slots": {
+        "topic": { "coarse": ["인문"], "fine": ["인문교양총서"], "subject": [], "source": "direct" },
+        "purpose": { "value": "교양", "source": "direct" },
+        "reading_level": { "value": "easy", "source": "direct" },
+        "mood": { "value": null, "source": "null" },
+        "constraints": [],
+        "availability_required": false
+      },
+      "availability_expectation": null,
+      "_hint": "63세 페르소나. 1턴: 거의 null → onboarding(인문/에세이 선호)으로 topic 제안 → 인문교양으로 수렴"
+    }
+
+  ]
+}
