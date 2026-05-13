@@ -5,8 +5,8 @@
 # 변경 이력:
 #   v0.1 - 최초 작성
 #          chat_service.py에서 파이프라인 단계 분리
-#   v0.2 - Reranker 연동 (app/models/clova_reranker.py)
-#          availability 조회 연동 (app/models/loan_availability.py)
+#   v0.2 - Reranker 연동 (app/modules/reranker/clova_reranker.py)
+#          availability 조회 연동 (app/services/loan_availability.py)
 #
 # 새 단계 추가 방법:
 #   1. 아래에 async def run_xxx() 또는 def run_xxx() 추가
@@ -59,6 +59,9 @@ class PipelineResult:
     # [5] 대출 가능 여부 조회 결과
     # 형태: {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
     availability_index: dict[str, dict] = field(default_factory=dict)
+
+    # context.slots.availability_required 값 — final_results 필터링 기준
+    availability_required: bool = False
 
     # 에러 발생 단계 기록 (디버깅용)
     errors: list[str] = field(default_factory=list)
@@ -137,7 +140,7 @@ def run_reranker(
     """
     [4단계] CLOVA Reranker (B파트 연동)
 
-    app/models/clova_reranker.py의
+    app/modules/reranker/clova_reranker.py의
     create_payload_and_rerank() + call_clova_reranker()를 호출합니다.
 
     clova_api_key 없으면 payload 생성까지만 하고 BM25 결과 그대로 반환.
@@ -156,7 +159,7 @@ def run_reranker(
         return []
 
     try:
-        from app.models.clova_reranker import (
+        from backend.app.modules.reranker.clova_reranker import (
             call_clova_reranker,
             create_payload_and_rerank,
         )
@@ -195,7 +198,7 @@ def run_reranker(
         return reranked
 
     except ImportError:
-        logger.warning("Reranker 모듈 없음 (app/models/clova_reranker.py) — 스킵")
+        logger.warning("Reranker 모듈 없음 (app/modules/reranker/clova_reranker.py) — 스킵")
         return []
     except Exception as e:
         logger.error("Reranking 실패: %s", e)
@@ -211,7 +214,7 @@ def run_availability(
     """
     [5단계] 정보나루 API 대출 가능 여부 조회
 
-    app/models/loan_availability.py의 check_books_availability()를 호출합니다.
+    app/services/loan_availability.py의 check_books_availability()를 호출합니다.
 
     Args:
         books        : final_results 후보 도서 목록
@@ -235,7 +238,7 @@ def run_availability(
         return {}
 
     try:
-        from app.models.loan_availability import check_books_availability
+        from backend.app.services.loan_availability import check_books_availability
 
         isbns  = [b.get("isbn", "") for b in books if b.get("isbn")]
         result = check_books_availability(isbns, _lib_code, _api_key)
@@ -243,7 +246,7 @@ def run_availability(
         return result
 
     except ImportError:
-        logger.warning("loan_availability 모듈 없음 (app/models/loan_availability.py) — 스킵")
+        logger.warning("loan_availability 모듈 없음 (app/services/loan_availability.py) — 스킵")
         return {}
     except Exception as e:
         logger.error("대출 가능 여부 조회 실패: %s", e)

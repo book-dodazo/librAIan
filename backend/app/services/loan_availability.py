@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     load_dotenv(Path(__file__).parents[2] / ".env")  # backend/.env
 
-    from backend.app.models.clova_reranker import (
+    from backend.app.modules.reranker.clova_reranker import (
         call_clova_reranker,
         create_payload_and_rerank,
     )
