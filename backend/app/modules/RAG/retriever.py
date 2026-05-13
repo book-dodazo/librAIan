@@ -5,7 +5,11 @@ import time
 import random
 import requests
 import os
+from pathlib import Path
 from app.core.config import settings
+from dotenv import load_dotenv
+import json
+
 
 # 함수 사용법
 # full_bm25(result)
@@ -14,6 +18,14 @@ from app.core.config import settings
 # chunk_dense(result)
 # full_hybrid(result)
 # chunk_hybrid(result)
+
+load_dotenv()
+base = Path(__file__).resolve()
+
+# app 폴더까지
+app_dir = base.parents[2]
+embedding_path = app_dir / "db" / "small_category_embeddings.json"
+
 
 URL = "https://clovastudio.stream.ntruss.com/testapp/v1/api-tools/embedding/v2/"
 CLOVA_API_KEY = settings.CLOVA_API_KEY
@@ -26,6 +38,17 @@ es = Elasticsearch(
     ),
     verify_certs=False
 )
+
+_small_cate_cache = None
+
+def get_small_category_embeddings():
+    global _small_cate_cache
+
+    if _small_cate_cache is None:
+        with open(embedding_path, "r", encoding="utf-8") as f:
+            _small_cate_cache = json.load(f)
+
+    return _small_cate_cache
 
 def make_headers():
 
@@ -80,21 +103,23 @@ def get_similar_small_categories(
     top_k=20,
     threshold=0.7
 ):
-    # 1. subject embedding
     query_vec = get_embedding(subject)
 
     results = []
 
-    for cate, emb in small_category_embeddings.items():
+    for item in small_category_embeddings:
+        cate = item.get("small_cate") or item.get("category") or item.get("cate")
+        emb = item.get("embedding")
+
+        if cate is None or emb is None:
+            continue
+
         sim = cosine_similarity(query_vec, emb)
 
         if sim >= threshold:
             results.append((cate, sim))
 
-    # 2. 정렬
     results.sort(key=lambda x: x[1], reverse=True)
-
-    # 3. top_k
     return results[:top_k]
 
 def to_list(x):
@@ -170,8 +195,12 @@ def make_review_boost_query(query_text, boost):
 def full_bm25(
     result,
     index_name="books_review_full",
-    size=20
+    size=20,
+    small_category_embeddings=None,
     ):
+    if small_category_embeddings is None:
+        small_category_embeddings = get_small_category_embeddings()
+
     keyword_query = " ".join(result.get("keyword_query", [])).strip()
     filters = result.get("filters", {})
     score_boost = result.get("score_boost", {})
@@ -271,6 +300,25 @@ def full_bm25(
             make_review_boost_query(sub, boost=1.1)
         ])
 
+        if small_category_embeddings:
+
+            similar_small_cates = get_similar_small_categories(
+                subject=sub,
+                small_category_embeddings=small_category_embeddings,
+                top_k=5,
+                threshold=0.7
+            )
+
+            for small_cate, sim in similar_small_cates:
+                should_clause.append({
+                    "term": {
+                        "small_cate": {
+                            "value": small_cate,
+                            "boost": min(1.0 + float(sim), 2.0)
+                        }
+                    }
+                })
+
     must_clause = []
 
     if keyword_query:
@@ -369,10 +417,14 @@ def make_review_chunk_boost_query(query_text, boost=0.4):
 def chunk_bm25(
     result,
     index_name="books_review_chunk",
+    small_category_embeddings=None,
     size=20,
     candidate_size=100,
     top_k_per_book=3
 ):
+    if small_category_embeddings is None:
+        small_category_embeddings = get_small_category_embeddings()
+
     keyword_query = " ".join(result.get("keyword_query", [])).strip()
     filters = result.get("filters", {})
     score_boost = result.get("score_boost", {})
@@ -445,20 +497,14 @@ def chunk_bm25(
         })
 
     for sub in subjects:
+
         should_clause.extend([
-            {
-                "match": {
-                    "chunk_text": {
-                        "query": sub,
-                        "boost": 2.0
-                    }
-                }
-            },
+
             {
                 "match": {
                     "book_intro": {
                         "query": sub,
-                        "boost": 1.3
+                        "boost": 1.8
                     }
                 }
             },
@@ -466,7 +512,7 @@ def chunk_bm25(
                 "match": {
                     "book_index": {
                         "query": sub,
-                        "boost": 1.3
+                        "boost": 1.5
                     }
                 }
             },
@@ -478,8 +524,28 @@ def chunk_bm25(
                     }
                 }
             },
-            make_review_chunk_boost_query(sub, boost=0.4)
+            make_review_boost_query(sub, boost=1.1)
         ])
+
+        if small_category_embeddings:
+
+            similar_small_cates = get_similar_small_categories(
+                subject=sub,
+                small_category_embeddings=small_category_embeddings,
+                top_k=5,
+                threshold=0.7
+            )
+
+            for small_cate, sim in similar_small_cates:
+                should_clause.append({
+                    "term": {
+                        "small_cate": {
+                            "value": small_cate,
+                            "boost": min(1.0 + float(sim), 2.0)
+                        }
+                    }
+                })
+
 
     must_clause = []
 
@@ -582,8 +648,13 @@ def full_dense(
     result,
     index_name="books_review_full",
     size=20,
-    num_candidates=100
+    num_candidates=100,
+    small_category_embeddings=None
+
 ):
+    if small_category_embeddings is None:
+        small_category_embeddings = get_small_category_embeddings()
+
     semantic_query = result.get("semantic_query", "").strip()
 
     if not semantic_query:
@@ -591,9 +662,11 @@ def full_dense(
 
     filters = result.get("filters", {})
     constraints = result.get("constraints", {})
+    score_boost = result.get("score_boost", {})
 
     coarse_categories = to_list(filters.get("coarse_category"))
-
+    fine_categories = to_list(score_boost.get("fine_category"))
+    subjects = to_list(score_boost.get("subject"))
     authors = to_list(constraints.get("author"))
     author_nons = to_list(constraints.get("author_non"))
     page_range = constraints.get("page_range", [])
@@ -668,14 +741,73 @@ def full_dense(
         body=query_body
     )
 
-    return [
-    {
-        "rank": i + 1,
-        "score": hit["_score"],
-        **hit["_source"]
-    }
-    for i, hit in enumerate(res["hits"]["hits"])
-    ]
+    # subject 기반 유사 소분류 계산
+
+    similar_small_cate_scores = {}
+
+    if subjects and small_category_embeddings:
+
+        for sub in subjects:
+
+            similar_small_cates = get_similar_small_categories(
+
+                subject=sub,
+
+                small_category_embeddings=small_category_embeddings,
+
+                top_k=5,
+
+                threshold=0.7
+
+            )
+
+            for small_cate, sim in similar_small_cates:
+
+                similar_small_cate_scores[small_cate] = max(
+
+                    similar_small_cate_scores.get(small_cate, 0),
+
+                    float(sim)
+
+                )
+
+    results = []
+
+    for i, hit in enumerate(res["hits"]["hits"]):
+        source = hit["_source"]
+        dense_score = hit["_score"]
+        rerank_score = dense_score
+        doc_mid_cates = to_list(source.get("mid_cate"))
+        doc_small_cates = to_list(source.get("small_cate"))
+
+        # 중분류 보너스
+        if fine_categories and any(cate in fine_categories for cate in doc_mid_cates):
+            rerank_score += mid_bonus
+
+        # 유사 소분류 보너스
+        matched_small_scores = [
+            similar_small_cate_scores[cate]
+            for cate in doc_small_cates
+            if cate in similar_small_cate_scores
+        ]
+
+        if matched_small_scores:
+            rerank_score += small_bonus * max(matched_small_scores)
+
+        results.append({
+            "rank": None,
+            "score": rerank_score,
+            "dense_score": dense_score,
+            "cate_bonus": rerank_score - dense_score,
+            **source
+        })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+
+    for i, r in enumerate(results[:size], start=1):
+        r["rank"] = i
+
+    return results[:size]
 
 #==================================================================
 #                            Dense chunk
@@ -686,8 +818,13 @@ def chunk_dense(
     size=20,
     num_candidates=300,
     candidate_size=100,
-    top_k_per_book=3
-):
+    top_k_per_book=3,
+    small_category_embeddings=None,
+    
+):  
+    if small_category_embeddings is None:
+        small_category_embeddings = get_small_category_embeddings()
+
     semantic_query = result.get("semantic_query", "").strip()
 
     if not semantic_query:
@@ -695,9 +832,11 @@ def chunk_dense(
 
     filters = result.get("filters", {})
     constraints = result.get("constraints", {})
-
+    score_boost = result.get("score_boost", {})
+    
     coarse_categories = to_list(filters.get("coarse_category"))
-
+    fine_categories = to_list(score_boost.get("fine_category"))
+    subjects = to_list(score_boost.get("subject"))
     authors = to_list(constraints.get("author"))
     author_nons = to_list(constraints.get("author_non"))
     page_range = constraints.get("page_range", [])
@@ -832,17 +971,37 @@ def chunk_dense(
     book_results = []
 
     for isbn, chunks in by_isbn.items():
+
         chunks = sorted(chunks, key=lambda x: x["chunk_score"], reverse=True)
         top_chunks = chunks[:top_k_per_book]
-
+    
         max_score = top_chunks[0]["chunk_score"]
         mean_score = sum(c["chunk_score"] for c in top_chunks) / len(top_chunks)
-
-        book_score = max_score * 0.7 + mean_score * 0.3
-
+        base_score = max_score * 0.7 + mean_score * 0.3
+        cate_bonus = 0.0
         rep = top_chunks[0].copy()
+
+        doc_mid_cates = to_list(rep.get("mid_cate"))
+        doc_small_cates = to_list(rep.get("small_cate"))
+
+        if fine_categories and any(cate in fine_categories for cate in doc_mid_cates):
+            cate_bonus += mid_bonus
+
+        matched_small_scores = [
+            similar_small_cate_scores[cate]
+            for cate in doc_small_cates
+            if cate in similar_small_cate_scores
+        ]
+
+        if matched_small_scores:
+            cate_bonus += small_bonus * max(matched_small_scores)
+
+        book_score = base_score + cate_bonus
+
         rep["rank"] = None
         rep["score"] = book_score
+        rep["base_score"] = base_score
+        rep["cate_bonus"] = cate_bonus
         rep["max_chunk_score"] = max_score
         rep["mean_chunk_score"] = mean_score
         rep["matched_chunk_count"] = len(top_chunks)
@@ -854,6 +1013,7 @@ def chunk_dense(
     book_results.sort(key=lambda x: x["score"], reverse=True)
 
     for i, r in enumerate(book_results[:size], start=1):
+
         r["rank"] = i
 
     return book_results[:size]
@@ -870,8 +1030,12 @@ def full_hybrid(
     dense_candidate_size=100,
     num_candidates=300,
     require_both=False,
-    overlap_bonus=0.1
+    overlap_bonus=0.1,
+    small_category_embeddings=None
 ):
+    if small_category_embeddings is None:
+        small_category_embeddings = get_small_category_embeddings()
+
     def fill_metadata(item, r):
         for key in ["title", "author", "page", "large", "review_count"]:
             if item.get(key) is None and r.get(key) is not None:
@@ -880,14 +1044,16 @@ def full_hybrid(
     bm25_results = full_bm25(
         result=result,
         index_name="books_review_full",
-        size=bm25_candidate_size
+        size=bm25_candidate_size,
+        small_category_embeddings=small_category_embeddings
     )
 
     dense_results = full_dense(
         result=result,
         index_name="books_review_full",
         size=dense_candidate_size,
-        num_candidates=num_candidates
+        num_candidates=num_candidates,
+        small_category_embeddings=small_category_embeddings
     )
 
     bm25_norm = normalize_scores(bm25_results)
@@ -1002,14 +1168,19 @@ def chunk_hybrid(
     bm25_candidate_size=100,
     dense_candidate_size=100,
     num_candidates=300,
-    top_k_per_book=3
+    top_k_per_book=3,
+    small_category_embeddings=None
 ):
+    if small_category_embeddings is None:
+        small_category_embeddings = get_small_category_embeddings()
+
     bm25_results = chunk_bm25(
         result=result,
         index_name="books_review_chunk",
         size=bm25_candidate_size,
         candidate_size=bm25_candidate_size,
-        top_k_per_book=top_k_per_book
+        top_k_per_book=top_k_per_book,
+        small_category_embeddings=small_category_embeddings
     )
 
     dense_results = chunk_dense(
@@ -1018,7 +1189,8 @@ def chunk_hybrid(
         size=dense_candidate_size,
         candidate_size=dense_candidate_size,
         num_candidates=num_candidates,
-        top_k_per_book=top_k_per_book
+        top_k_per_book=top_k_per_book,
+        small_category_embeddings=small_category_embeddings
     )
 
     bm25_norm = normalize_scores(bm25_results)
@@ -1080,3 +1252,43 @@ def chunk_hybrid(
         r["rank"] = i
 
     return final_results[:size]
+
+if __name__ == "__main__":
+    test_query = {
+        "keyword_query": ["위로가 되는 성장 소설"],
+        "semantic_query": "위로가 되는 성장 소설",
+        "filters": {
+            "coarse_category": ["소설"]
+        },
+        "score_boost": {
+            "fine_category": ["소설"],
+            "subject": ["위로", "성장"]
+        },
+        "constraints": {
+            "author": [],
+            "author_non": [],
+            "page_range": [],
+            "pub_year": []
+        }
+    }
+
+    results = full_hybrid(
+        result=test_query,
+
+    )
+
+    for r in results:
+        print("=" * 80)
+        print("rank:", r.get("rank"))
+        print("score:", r.get("score"))
+        print("isbn:", r.get("isbn"))
+        print("title:", r.get("title"))
+        print("author:", r.get("author"))
+        print("review_count:", r.get("review_count"))
+        print("bm25_score:", r.get("bm25_score"))
+        print("dense_score:", r.get("dense_score"))
+        print("bm25_raw_score:", r.get("bm25_raw_score"))
+        print("dense_raw_score:", r.get("dense_raw_score"))
+        print("has_bm25:", r.get("has_bm25"))
+        print("has_dense:", r.get("has_dense"))
+        print("source:", r.get("source"))
