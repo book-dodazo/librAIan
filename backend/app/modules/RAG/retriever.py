@@ -20,7 +20,10 @@ CLOVA_API_KEY = settings.CLOVA_API_KEY
 
 es = Elasticsearch(
     "https://localhost:9200",
-    basic_auth=("elastic", "dw2s3Vinv8X6ihtUy_fB"),
+    basic_auth=(
+        settings.ELASTIC_USER,
+        settings.ELASTIC_PASSWORD
+    ),
     verify_certs=False
 )
 
