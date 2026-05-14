@@ -25,7 +25,7 @@ CLOVA_API_KEY = settings.CLOVA_API_KEY
 
 ELASTIC_URL= "https://localhost:9200"
 ELASTIC_USER= "elastic"
-ELASTIC_PASSWORD="120408"
+ELASTIC_PASSWORD="dw2s3Vinv8X6ihtUy_fB"
 
 _small_cate_cache = None
 

@@ -32,6 +32,12 @@ from typing import Any, Optional
 
 from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext
+from app.modules.RAG.retriever import full_bm25
+from app.modules.reranker.clova_reranker import (
+            call_clova_reranker,
+            create_payload_and_rerank,
+        )
+from app.services.loan_availability import check_books_availability
 
 logger = logging.getLogger(__name__)
 
@@ -114,18 +120,14 @@ def run_bm25_search(
     모듈이 없으면 빈 리스트 반환 (graceful skip).
     """
     try:
-        from app.modules.RAG.BM25 import search_bm25_with_cate
-        results = search_bm25_with_cate(
-            result                   = rag_query,
-            small_category_embeddings= small_category_embeddings,
-            index_name               = index_name,
-            size                     = size,
+        results = full_bm25(
+            result                   = rag_query
         )
         logger.info("BM25 검색 완료: %d건", len(results))
         return results
 
     except ImportError:
-        logger.warning("BM25 모듈 없음 (app/modules/RAG/BM25.py) — 검색 스킵")
+        logger.warning("BM25 모듈 없음 (app/modules/RAG/retriever.py) — 검색 스킵")
         return []
     except Exception as e:
         logger.error("BM25 검색 실패: %s", e, exc_info=True)
@@ -159,11 +161,6 @@ def run_reranker(
         return []
 
     try:
-        from backend.app.modules.reranker.clova_reranker import (
-            call_clova_reranker,
-            create_payload_and_rerank,
-        )
-
         # rag_query를 reranker가 기대하는 reconstructed_session 형태로 전달
         reconstructed_session = rag_query
 
@@ -238,8 +235,6 @@ def run_availability(
         return {}
 
     try:
-        from backend.app.services.loan_availability import check_books_availability
-
         isbns  = [b.get("isbn", "") for b in books if b.get("isbn")]
         result = check_books_availability(isbns, _lib_code, _api_key)
         logger.info("대출 가능 여부 조회 완료: %d건", len(result))
