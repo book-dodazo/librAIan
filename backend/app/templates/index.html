@@ -232,7 +232,7 @@
 
 <script>
   // ── 상태 ─────────────────────────────────────────────────
-  let apiBase      = localStorage.getItem('apiBase') || 'http://localhost:8000';
+  let apiBase      = localStorage.getItem('apiBase') || '{{ apiBase }}';
   let history      = [];
   let context      = null;   // SessionContext — 매 응답마다 갱신
   let pendingSlots = [];     // 마지막 질문이 채우려는 slot 목록
@@ -347,7 +347,7 @@
         method : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body   : JSON.stringify(body),
-        signal : AbortSignal.timeout(20000),
+        signal : AbortSignal.timeout(300000),
       });
 
       removeLoading(loadingId);
