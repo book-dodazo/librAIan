@@ -888,6 +888,36 @@ def chunk_dense(
             }
         })
 
+    # subject 기반 유사 소분류 점수 계산
+
+    similar_small_cate_scores = {}
+
+    if subjects and small_category_embeddings:
+
+        for sub in subjects:
+
+            similar_small_cates = get_similar_small_categories(
+
+                subject=sub,
+
+                small_category_embeddings=small_category_embeddings,
+
+                top_k=5,
+
+                threshold=0.7
+
+            )
+
+            for small_cate, sim in similar_small_cates:
+
+                similar_small_cate_scores[small_cate] = max(
+
+                    similar_small_cate_scores.get(small_cate, 0),
+
+                    float(sim)
+
+                )
+
     query_vector = get_embedding(semantic_query)
 
     query_body = {
@@ -1253,42 +1283,3 @@ def chunk_hybrid(
 
     return final_results[:size]
 
-if __name__ == "__main__":
-    test_query = {
-        "keyword_query": ["위로가 되는 성장 소설"],
-        "semantic_query": "위로가 되는 성장 소설",
-        "filters": {
-            "coarse_category": ["소설"]
-        },
-        "score_boost": {
-            "fine_category": ["소설"],
-            "subject": ["위로", "성장"]
-        },
-        "constraints": {
-            "author": [],
-            "author_non": [],
-            "page_range": [],
-            "pub_year": []
-        }
-    }
-
-    results = full_hybrid(
-        result=test_query,
-
-    )
-
-    for r in results:
-        print("=" * 80)
-        print("rank:", r.get("rank"))
-        print("score:", r.get("score"))
-        print("isbn:", r.get("isbn"))
-        print("title:", r.get("title"))
-        print("author:", r.get("author"))
-        print("review_count:", r.get("review_count"))
-        print("bm25_score:", r.get("bm25_score"))
-        print("dense_score:", r.get("dense_score"))
-        print("bm25_raw_score:", r.get("bm25_raw_score"))
-        print("dense_raw_score:", r.get("dense_raw_score"))
-        print("has_bm25:", r.get("has_bm25"))
-        print("has_dense:", r.get("has_dense"))
-        print("source:", r.get("source"))
