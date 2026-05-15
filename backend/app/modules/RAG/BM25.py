@@ -167,8 +167,8 @@ def search_bm25_with_cate(
     score_boost = result.get("score_boost", {})
     constraints = result.get("constraints", {})
 
-    coarse_categories = to_list(filters.get("coarse_category"))
-    fine_categories = to_list(score_boost.get("fine_category"))
+    coarse_categories = to_list(filters.get("cate_depth1"))
+    fine_categories = to_list(score_boost.get("cate_depth2"))
     subjects = to_list(score_boost.get("subject"))
 
     authors = to_list(constraints.get("author"))

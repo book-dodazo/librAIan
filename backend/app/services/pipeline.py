@@ -7,11 +7,8 @@
 #          chat_service.py에서 파이프라인 단계 분리
 #   v0.2 - Reranker 연동 (app/models/clova_reranker.py)
 #          availability 조회 연동 (app/models/loan_availability.py)
-#
-# 새 단계 추가 방법:
-#   1. 아래에 async def run_xxx() 또는 def run_xxx() 추가
-#   2. PipelineResult에 필드 추가
-#   3. run_full_pipeline()에 순서대로 호출 추가
+#   v0.3 - 단계별 소요시간 + 후보 수 측정 추가
+#          run_full_pipeline이 (PipelineResult, PipelineLog) 튜플 반환
 # ============================================================
 """
 파이프라인 단계 정의
@@ -27,6 +24,7 @@
 """
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -102,7 +100,7 @@ def run_bm25_search(
     rag_query                : dict[str, Any],
     small_category_embeddings: Optional[dict] = None,
     index_name               : str = "book_bm25_no_review",
-    size                     : int = 20,
+    size                     : int = 10,
 ) -> list[dict]:
     """
     [3단계] BM25 검색 (A파트 연동)
@@ -125,7 +123,7 @@ def run_bm25_search(
         logger.warning("BM25 모듈 없음 (app/modules/RAG/BM25.py) — 검색 스킵")
         return []
     except Exception as e:
-        logger.error("BM25 검색 실패: %s", e, exc_info=True)
+        logger.error("BM25 검색 실패: %s", e)
         return []
 
 
@@ -255,54 +253,63 @@ async def run_full_pipeline(
     small_category_embeddings: Optional[dict] = None,
     lib_code                 : Optional[str]  = None,
     naru_api_key             : Optional[str]  = None,
-) -> PipelineResult:
+) -> tuple["PipelineResult", "PipelineLog"]:
     """
     RAG 이후 전체 파이프라인을 순서대로 실행합니다.
 
-    chat_service.py의 _build_rag_response에서 이 함수를 호출합니다.
-    새 단계 추가 시 여기에 순서대로 추가하세요.
-
-    Args:
-        context                  : 현재 세션 컨텍스트
-        small_category_embeddings: 소분류 임베딩 (없으면 subject boost 스킵)
-        lib_code                 : 도서관 코드 (없으면 환경변수 사용)
-        naru_api_key             : 정보나루 API 키 (없으면 환경변수 사용)
-
     Returns:
-        PipelineResult
+        (PipelineResult, PipelineLog) 튜플
+        PipelineLog는 session_logger로 전달해서 로깅에 사용
     """
-    result = PipelineResult()
+    from app.core.session_logger import PipelineLog
+
+    result     = PipelineResult()
+    elapsed_ms = {}
 
     # [2] RAG 쿼리 생성
+    t0 = time.monotonic()
     result.rag_query = await run_rag_query(context)
+    elapsed_ms["rag_query"] = int((time.monotonic() - t0) * 1000)
 
     # [3] BM25 검색
+    t0 = time.monotonic()
     result.bm25_results = run_bm25_search(
         rag_query                = result.rag_query,
         small_category_embeddings= small_category_embeddings,
     )
+    elapsed_ms["bm25"] = int((time.monotonic() - t0) * 1000)
 
     # [4] CLOVA Reranker
+    t0 = time.monotonic()
     result.reranked_results = run_reranker(
         bm25_results = result.bm25_results,
         rag_query    = result.rag_query,
     )
+    elapsed_ms["reranker"] = int((time.monotonic() - t0) * 1000)
 
     # [5] 대출 가능 여부 조회
-    # availability_required=True 면 항상 조회
-    # False 면 조회는 하되 final_results에서 필터링은 안 함 (표시만)
+    t0 = time.monotonic()
     candidate_books = result.reranked_results or result.bm25_results
     result.availability_index = run_availability(
         books        = candidate_books,
         lib_code     = lib_code,
         naru_api_key = naru_api_key,
     )
+    elapsed_ms["availability"] = int((time.monotonic() - t0) * 1000)
+    elapsed_ms["total"]        = sum(v for k, v in elapsed_ms.items() if k != "total")
+
+    pipeline_log = PipelineLog(
+        bm25_count        = len(result.bm25_results),
+        reranker_count    = len(result.reranked_results),
+        availability_count= len(result.availability_index),
+        elapsed_ms        = elapsed_ms,
+    )
 
     logger.info(
-        "파이프라인 완료: bm25=%d건 reranked=%d건 availability=%d건 availability result=%s",
-        len(result.bm25_results),
-        len(result.reranked_results),
-        len(result.availability_index),
-        result.availability_index
+        "파이프라인 완료: bm25=%d건 reranked=%d건 availability=%d건 total=%dms",
+        pipeline_log.bm25_count,
+        pipeline_log.reranker_count,
+        pipeline_log.availability_count,
+        elapsed_ms["total"],
     )
-    return result
+    return result, pipeline_log

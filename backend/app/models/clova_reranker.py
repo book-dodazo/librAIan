@@ -127,8 +127,8 @@ def build_clova_query(reconstructed_session: Dict[str, Any]) -> str:
     {
         "keyword_query": ["SF", "소설", "재미", "가벼운"],
         "semantic_query": "지친 일상에서 가볍고 재미있게 읽을 수 있는 SF 소설",
-        "filters": {"coarse_category": "과학/기술"},
-        "score_boost": {"fine_category": "SF", "subject": "우주 탐험"}
+        "filters": {"cate_depth1": "과학/기술"},
+        "score_boost": {"cate_depth2": "SF", "subject": "우주 탐험"}
     }
     """
     keyword_query = reconstructed_session.get("keyword_query", [])
@@ -144,11 +144,11 @@ def build_clova_query(reconstructed_session: Dict[str, Any]) -> str:
     if keyword_query:
         query_parts.append(f"핵심 키워드: {', '.join(keyword_query)}")
 
-    if filters.get("coarse_category"):
-        query_parts.append(f"검색 대분류: {filters['coarse_category']}")
+    if filters.get("cate_depth1"):
+        query_parts.append(f"검색 대분류: {filters['cate_depth1']}")
 
-    if score_boost.get("fine_category"):
-        query_parts.append(f"선호 세부 장르: {score_boost['fine_category']}")
+    if score_boost.get("cate_depth2"):
+        query_parts.append(f"선호 세부 장르: {score_boost['cate_depth2']}")
 
     if score_boost.get("subject"):
         query_parts.append(f"관심 소재: {score_boost['subject']}")
@@ -459,11 +459,11 @@ if __name__ == "__main__":
         "keyword_query": ["SF", "소설", "재미", "가벼운", "힐링"],
         "semantic_query": "지친 일상에서 가볍고 재미있게 읽을 수 있는 SF 소설",
         "filters": {
-            "coarse_category": "과학/기술",
+            "cate_depth1": "과학/기술",
             "availability": None,
         },
         "score_boost": {
-            "fine_category": "SF",
+            "cate_depth2": "SF",
             "subject": "우주 탐험",
         },
     }

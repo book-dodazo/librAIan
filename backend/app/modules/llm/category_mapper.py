@@ -113,6 +113,37 @@ def get_coarse_category(fine: str) -> Optional[str]:
     return None
 
 
+def get_canonical_fine(free_form: str) -> Optional[str]:
+    """
+    자유형 주제어 → 카테고리 트리의 정규 중분류(cate_depth2) 값으로 변환
+
+    1. 정확 매칭: "한국소설" → "한국소설"
+    2. 부분 매칭: 트리 키가 입력값으로 시작하거나, 입력값이 트리 키로 시작하는 경우
+    3. 실패 → None (자유형 그대로 유지)
+
+    예)
+        get_canonical_fine("한국소설") → "한국소설"
+        get_canonical_fine("한국사")   → "한국사" (정확 매칭)
+        get_canonical_fine("SF")       → None (매핑 없음)
+        get_canonical_fine("파이썬")   → None (트리에 없음)
+    """
+    if not free_form:
+        return None
+
+    # 1. 정확 매칭
+    if free_form in _FINE_TO_COARSE:
+        return free_form
+
+    # 2. 부분 매칭 (3글자 이상만)
+    if len(free_form) > 2:
+        for fine_key in _FINE_TO_COARSE:
+            if fine_key.startswith(free_form) or free_form.startswith(fine_key):
+                logger.debug("중분류 부분 매칭: %s → %s", free_form, fine_key)
+                return fine_key
+
+    return None
+
+
 def get_all_coarse_categories() -> list[str]:
     """
     대분류 목록 반환 (LLM 폴백 시 프롬프트에 전달용)

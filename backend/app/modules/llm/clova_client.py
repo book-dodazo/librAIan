@@ -25,7 +25,7 @@ base_url 만 바꿔서 openai Python SDK 를 그대로 재사용합니다.
 import json
 import logging
 
-from openai import AsyncOpenAI, APIError, AuthenticationError
+from openai import AsyncOpenAI, APIError, AuthenticationError, APITimeoutError
 
 from app.core.config import settings
 from app.core.exceptions import IntentParseError, LLMCallError
@@ -51,6 +51,7 @@ def _make_client() -> AsyncOpenAI:
     return AsyncOpenAI(
         api_key=settings.CLOVA_API_KEY,
         base_url=settings.CLOVA_BASE_URL,
+        timeout=45.0,
     )
 
 
@@ -103,9 +104,12 @@ async def chat_complete(
         return response.choices[0].message.content or ""
 
     except AuthenticationError as e:
-        # 401 — API 키 오류
         logger.error("CLOVA 인증 실패. API 키를 확인하세요: %s", e)
         raise LLMCallError("CLOVA Studio API 키가 올바르지 않습니다.") from e
+
+    except APITimeoutError as e:
+        logger.error("CLOVA API 타임아웃 (45s 초과)")
+        raise LLMCallError("CLOVA Studio 응답 시간 초과 (45초). 잠시 후 다시 시도해 주세요.") from e
 
     except APIError as e:
         logger.error("CLOVA API 오류: status=%s body=%s", e.status_code, e.body)
