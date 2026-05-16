@@ -137,12 +137,11 @@ def to_list(x):
 
     return [x]
 
-def parse_page_conditions(page_range):
+def parse_page_conditions(page_range, around_margin=30):
     if not page_range:
         return None, []
 
     range_body = {}
-    must_not_clause = []
 
     for cond in page_range:
         op = cond.get("operator")
@@ -151,19 +150,163 @@ def parse_page_conditions(page_range):
         if value is None:
             continue
 
+        value = int(value)
+
         if op in ["gte", "gt", "lte", "lt"]:
             range_body[op] = value
+
         elif op == "eq":
             range_body["gte"] = value
             range_body["lte"] = value
-        elif op == "exclude":
-            must_not_clause.append({"term": {"page": value}})
+
+        elif op == "around":
+            range_body["gte"] = max(0, value - around_margin)
+            range_body["lte"] = value + around_margin
 
     page_filter = None
     if range_body:
-        page_filter = {"range": {"page": range_body}}
+        page_filter = {
+            "range": {
+                "page": range_body
+            }
+        }
 
-    return page_filter, must_not_clause
+    return page_filter, []
+
+mid_bonus = 0.08
+small_bonus = 0.05
+
+#==================================================================
+#                          온보딩 데이터 검색
+#==================================================================
+READING_LEVEL_TEXT = {
+
+    "easy": "쉽게 읽히는 쉬운 문체 입문자용",
+    "medium": "적당한 난이도의 대중적인 문체",
+    "hard": "깊이 있는 어려운 문체 전문적인 내용"
+
+}
+
+def make_onboarding_result(result):
+    onboarding = result.get("onboarding_signals", {})
+
+    topic = to_list(onboarding.get("topic"))
+    reading_level = onboarding.get("reading_level")
+    length_soft = onboarding.get("length_soft")
+
+    # 기존 main query 복사
+    keyword_query = result.get("keyword_query", [])
+    if not isinstance(keyword_query, list):
+        keyword_query = [keyword_query]
+
+    keyword_query = [
+        q for q in keyword_query
+        if q is not None and str(q).strip() != ""
+    ]
+
+    semantic_query = result.get("semantic_query", "").strip()
+
+    # 온보딩 검색에만 reading_level 추가
+    # if reading_level:
+    #     level_text = READING_LEVEL_TEXT.get(reading_level, reading_level)
+    #     keyword_query.append(level_text)
+
+    #     if semantic_query:
+    #         semantic_query = semantic_query + " " + level_text
+    #     else:
+    #         semantic_query = level_text
+
+    onboarding_result = {
+        "keyword_query": keyword_query,
+        "semantic_query": semantic_query,
+
+        "filters": {
+            "cate_depth2": topic
+        },
+
+        "constraints": {
+            "page_range": [length_soft] if length_soft else []
+        },
+
+        "score_boost": {
+            "cate_depth2": [],
+            "subject": []
+        },
+
+        "onboarding_signals": {}
+    }
+
+    return onboarding_result
+
+
+def apply_bm25_disliked_penalty(results, result, penalty=999):
+    disliked_keywords = to_list(
+        result.get("onboarding_signals", {}).get("disliked_keywords")
+    )
+
+    if not disliked_keywords:
+        return results
+
+    fields = [
+        "title",
+        "book_intro",
+        "book_index",
+        "content",
+        "review_text",
+        "category_text",
+        "chunk_text"
+    ]
+
+    for r in results:
+        text = " ".join(str(r.get(f, "") or "") for f in fields)
+
+        if any(kw in text for kw in disliked_keywords):
+            r["score"] -= penalty
+            r["bm25_disliked_penalty"] = penalty
+        else:
+            r["bm25_disliked_penalty"] = 0.0
+
+    return results
+
+def apply_dense_disliked_penalty(
+    results,
+    result,
+    penalty=999,
+    threshold=0.72
+):
+    disliked_keywords = to_list(
+        result.get("onboarding_signals", {}).get("disliked_keywords")
+    )
+
+    if not disliked_keywords:
+        return results
+
+    disliked_vectors = [
+        get_embedding(kw)
+        for kw in disliked_keywords
+    ]
+
+    for r in results:
+        doc_vec = r.get("embedding")
+
+        if doc_vec is None:
+            r["dense_disliked_penalty"] = 0.0
+            continue
+
+        max_sim = max(
+            cosine_similarity(doc_vec, bad_vec)
+            for bad_vec in disliked_vectors
+        )
+
+        r["disliked_similarity"] = float(max_sim)
+
+        if max_sim >= threshold:
+            r["score"] -= penalty
+            r["dense_disliked_penalty"] = penalty
+        else:
+            r["dense_disliked_penalty"] = 0.0
+
+    return results
 
 #==================================================================
 #                            BM25 full
@@ -205,14 +348,18 @@ def full_bm25(
     filters = result.get("filters", {})
     score_boost = result.get("score_boost", {})
     constraints = result.get("constraints", {})
-    coarse_categories = to_list(filters.get("coarse_category"))
-    fine_categories = to_list(score_boost.get("fine_category"))
+    
+    coarse_categories = to_list(filters.get("cate_depth1"))
+    anchor_title = filters.get("title")
+    anchor_author = filters.get("author")
+    mid_filter_categories = to_list(filters.get("cate_depth2"))
+    fine_categories = to_list(score_boost.get("cate_depth2"))
     subjects = to_list(score_boost.get("subject"))
 
     authors = to_list(constraints.get("author"))
     author_nons = to_list(constraints.get("author_non"))
     page_range = constraints.get("page_range", [])
-    pub_years = to_list(constraints.get("pub_year"))
+    pub_years = constraints.get("pub_year", [])
 
     filter_clause = []
     should_clause = []
@@ -223,6 +370,14 @@ def full_bm25(
             "terms": {
                 "large_cate": coarse_categories
             }
+        })
+
+    if mid_filter_categories:
+        filter_clause.append({
+            "terms": {
+                "mid_cate": mid_filter_categories
+            }
+
         })
 
     if authors:
@@ -242,6 +397,20 @@ def full_bm25(
             for author in author_nons
         ])
 
+    if anchor_title:
+        must_not_clause.append({
+            "match_phrase": {
+                "title": anchor_title
+            }
+        })
+
+    if anchor_author:
+        must_not_clause.append({
+            "match_phrase": {
+                "author": anchor_author
+            }
+        })
+
     page_filter, page_must_not = parse_page_conditions(page_range)
 
     if page_filter:
@@ -251,15 +420,50 @@ def full_bm25(
         must_not_clause.extend(page_must_not)
 
     if pub_years:
-        min_year = min(int(y) for y in pub_years)
+        for cond in pub_years:
+            operator = cond.get("operator")
+            value = cond.get("value")
 
-        filter_clause.append({
-            "range": {
-                "publish_date": {
-                    "gte": f"{min_year}-01-01"
-                }
-            }
-        })
+            if value is None:
+                continue
+
+            year = int(value)
+
+            if operator == "gte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gte": f"{year}-01-01"
+                        }
+                    }
+                })
+
+            elif operator == "gt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gt": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lte": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lt": f"{year}-01-01"
+                        }
+                    }
+                })
 
     for fc in fine_categories:
         should_clause.append({
@@ -363,14 +567,17 @@ def full_bm25(
         body=query_body
     )
 
-    return [
-    {
-        "rank": i + 1,
-        "score": hit["_score"],
-        **hit["_source"]
-    }
-    for i, hit in enumerate(res["hits"]["hits"])
+    results = [
+        {
+            "rank": i + 1,
+            "score": hit["_score"],
+            **hit["_source"]
+        }
+        for i, hit in enumerate(res["hits"]["hits"])
     ]
+    results = apply_bm25_disliked_penalty(results, result)
+
+    return results
 
 #==================================================================
 #                            BM25 chunk
@@ -430,14 +637,17 @@ def chunk_bm25(
     score_boost = result.get("score_boost", {})
     constraints = result.get("constraints", {})
 
-    coarse_categories = to_list(filters.get("coarse_category"))
-    fine_categories = to_list(score_boost.get("fine_category"))
+    coarse_categories = to_list(filters.get("cate_depth1"))
+    anchor_title = filters.get("title")
+    anchor_author = filters.get("author")
+    mid_filter_categories = to_list(filters.get("cate_depth2"))
+    fine_categories = to_list(score_boost.get("cate_depth2"))
     subjects = to_list(score_boost.get("subject"))
 
     authors = to_list(constraints.get("author"))
     author_nons = to_list(constraints.get("author_non"))
     page_range = constraints.get("page_range", [])
-    pub_years = to_list(constraints.get("pub_year"))
+    pub_years = constraints.get("pub_year", [])
 
     filter_clause = []
     should_clause = []
@@ -448,6 +658,14 @@ def chunk_bm25(
             "terms": {
                 "large_cate": coarse_categories
             }
+        })
+
+    if mid_filter_categories:
+        filter_clause.append({
+            "terms": {
+                "mid_cate": mid_filter_categories
+            }
+
         })
 
     if authors:
@@ -467,6 +685,20 @@ def chunk_bm25(
             for author in author_nons
         ])
 
+    if anchor_title:
+        must_not_clause.append({
+            "match_phrase": {
+                "title": anchor_title
+            }
+        })
+
+    if anchor_author:
+        must_not_clause.append({
+            "match_phrase": {
+                "author": anchor_author
+            }
+        })
+
     page_filter, page_must_not = parse_page_conditions(page_range)
 
     if page_filter:
@@ -476,15 +708,50 @@ def chunk_bm25(
         must_not_clause.extend(page_must_not)
 
     if pub_years:
-        min_year = min(int(y) for y in pub_years)
+        for cond in pub_years:
+            operator = cond.get("operator")
+            value = cond.get("value")
 
-        filter_clause.append({
-            "range": {
-                "publish_date": {
-                    "gte": f"{min_year}-01-01"
-                }
-            }
-        })
+            if value is None:
+                continue
+
+            year = int(value)
+
+            if operator == "gte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gte": f"{year}-01-01"
+                        }
+                    }
+                })
+
+            elif operator == "gt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gt": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lte": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lt": f"{year}-01-01"
+                        }
+                    }
+                })
 
     for fc in fine_categories:
         should_clause.append({
@@ -524,7 +791,7 @@ def chunk_bm25(
                     }
                 }
             },
-            make_review_boost_query(sub, boost=1.1)
+            make_review_chunk_boost_query(sub, boost=1.1)
         ])
 
         if small_category_embeddings:
@@ -635,12 +902,15 @@ def chunk_bm25(
 
         book_results.append(rep)
 
+    book_results = apply_bm25_disliked_penalty(book_results, result)
+
     book_results.sort(key=lambda x: x["score"], reverse=True)
 
     for i, r in enumerate(book_results[:size], start=1):
         r["rank"] = i
 
     return book_results[:size]
+
 #==================================================================
 #                            Dense full
 #==================================================================
@@ -664,13 +934,16 @@ def full_dense(
     constraints = result.get("constraints", {})
     score_boost = result.get("score_boost", {})
 
-    coarse_categories = to_list(filters.get("coarse_category"))
-    fine_categories = to_list(score_boost.get("fine_category"))
+    coarse_categories = to_list(filters.get("cate_depth1"))
+    anchor_title = filters.get("title")
+    anchor_author = filters.get("author")
+    mid_filter_categories = to_list(filters.get("cate_depth2"))
+    fine_categories = to_list(score_boost.get("cate_depth2"))
     subjects = to_list(score_boost.get("subject"))
     authors = to_list(constraints.get("author"))
     author_nons = to_list(constraints.get("author_non"))
     page_range = constraints.get("page_range", [])
-    pub_years = to_list(constraints.get("pub_year"))
+    pub_years = constraints.get("pub_year", [])
 
     filter_clause = []
     must_not_clause = []
@@ -680,6 +953,14 @@ def full_dense(
             "terms": {
                 "large_cate": coarse_categories
             }
+        })
+
+    if mid_filter_categories:
+        filter_clause.append({
+            "terms": {
+                "mid_cate": mid_filter_categories
+            }
+
         })
 
     if authors:
@@ -699,6 +980,20 @@ def full_dense(
             for author in author_nons
         ])
 
+    if anchor_title:
+        must_not_clause.append({
+            "match_phrase": {
+                "title": anchor_title
+            }
+        })
+
+    if anchor_author:
+        must_not_clause.append({
+            "match_phrase": {
+                "author": anchor_author
+            }
+        })
+
     page_filter, page_must_not = parse_page_conditions(page_range)
 
     if page_filter:
@@ -708,15 +1003,50 @@ def full_dense(
         must_not_clause.extend(page_must_not)
 
     if pub_years:
-        min_year = min(int(y) for y in pub_years)
+        for cond in pub_years:
+            operator = cond.get("operator")
+            value = cond.get("value")
 
-        filter_clause.append({
-            "range": {
-                "publish_date": {
-                    "gte": f"{min_year}-01-01"
-                }
-            }
-        })
+            if value is None:
+                continue
+
+            year = int(value)
+
+            if operator == "gte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gte": f"{year}-01-01"
+                        }
+                    }
+                })
+
+            elif operator == "gt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gt": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lte": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lt": f"{year}-01-01"
+                        }
+                    }
+                })
 
     query_vector = get_embedding(semantic_query)
 
@@ -802,6 +1132,8 @@ def full_dense(
             **source
         })
 
+    results = apply_dense_disliked_penalty(results, result)
+
     results.sort(key=lambda x: x["score"], reverse=True)
 
     for i, r in enumerate(results[:size], start=1):
@@ -834,13 +1166,16 @@ def chunk_dense(
     constraints = result.get("constraints", {})
     score_boost = result.get("score_boost", {})
     
-    coarse_categories = to_list(filters.get("coarse_category"))
-    fine_categories = to_list(score_boost.get("fine_category"))
+    coarse_categories = to_list(filters.get("cate_depth1"))
+    anchor_title = filters.get("title")
+    anchor_author = filters.get("author")
+    mid_filter_categories = to_list(filters.get("cate_depth2"))
+    fine_categories = to_list(score_boost.get("cate_depth2"))
     subjects = to_list(score_boost.get("subject"))
     authors = to_list(constraints.get("author"))
     author_nons = to_list(constraints.get("author_non"))
     page_range = constraints.get("page_range", [])
-    pub_years = to_list(constraints.get("pub_year"))
+    pub_years = constraints.get("pub_year", [])
 
     filter_clause = []
     must_not_clause = []
@@ -850,6 +1185,14 @@ def chunk_dense(
             "terms": {
                 "large_cate": coarse_categories
             }
+        })
+
+    if mid_filter_categories:
+        filter_clause.append({
+            "terms": {
+                "mid_cate": mid_filter_categories
+            }
+
         })
 
     if authors:
@@ -869,6 +1212,20 @@ def chunk_dense(
             for author in author_nons
         ])
 
+    if anchor_title:
+        must_not_clause.append({
+            "match_phrase": {
+                "title": anchor_title
+            }
+        })
+
+    if anchor_author:
+        must_not_clause.append({
+            "match_phrase": {
+                "author": anchor_author
+            }
+        })
+
     page_filter, page_must_not = parse_page_conditions(page_range)
 
     if page_filter:
@@ -878,15 +1235,50 @@ def chunk_dense(
         must_not_clause.extend(page_must_not)
 
     if pub_years:
-        min_year = min(int(y) for y in pub_years)
+        for cond in pub_years:
+            operator = cond.get("operator")
+            value = cond.get("value")
 
-        filter_clause.append({
-            "range": {
-                "publish_date": {
-                    "gte": f"{min_year}-01-01"
-                }
-            }
-        })
+            if value is None:
+                continue
+
+            year = int(value)
+
+            if operator == "gte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gte": f"{year}-01-01"
+                        }
+                    }
+                })
+
+            elif operator == "gt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gt": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lte":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lte": f"{year}-12-31"
+                        }
+                    }
+                })
+
+            elif operator == "lt":
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lt": f"{year}-01-01"
+                        }
+                    }
+                })
 
     # subject 기반 유사 소분류 점수 계산
 
@@ -1040,10 +1432,11 @@ def chunk_dense(
 
         book_results.append(rep)
 
+    book_results = apply_dense_disliked_penalty(book_results, result)
+
     book_results.sort(key=lambda x: x["score"], reverse=True)
 
     for i, r in enumerate(book_results[:size], start=1):
-
         r["rank"] = i
 
     return book_results[:size]
@@ -1051,6 +1444,31 @@ def chunk_dense(
 #==================================================================
 #                            Hybrid full
 #==================================================================
+def normalize_scores(results, score_key="score"):
+    if not results:
+        return []
+
+    scores = [r.get(score_key, 0) for r in results]
+    min_score = min(scores)
+    max_score = max(scores)
+
+    normalized = []
+
+    for r in results:
+        item = r.copy()
+
+        if max_score == min_score:
+            item["normalized_score"] = 1.0
+        else:
+            item["normalized_score"] = (
+                (item.get(score_key, 0) - min_score)
+                / (max_score - min_score)
+            )
+
+        normalized.append(item)
+
+    return normalized
+
 def full_hybrid(
     result,
     size=20,
@@ -1165,30 +1583,6 @@ def full_hybrid(
 #==================================================================
 #                            Hybrid chunk
 #==================================================================
-def normalize_scores(results, score_key="score"):
-    if not results:
-        return []
-
-    scores = [r.get(score_key, 0) for r in results]
-    min_score = min(scores)
-    max_score = max(scores)
-
-    normalized = []
-
-    for r in results:
-        item = r.copy()
-
-        if max_score == min_score:
-            item["normalized_score"] = 1.0
-        else:
-            item["normalized_score"] = (
-                (item.get(score_key, 0) - min_score)
-                / (max_score - min_score)
-            )
-
-        normalized.append(item)
-
-    return normalized
 
 def chunk_hybrid(
     result,
@@ -1283,3 +1677,127 @@ def chunk_hybrid(
 
     return final_results[:size]
 
+#==================================================================
+#                  Main result + Onboarding result 병합 검색
+#==================================================================
+
+def merge_weighted_results(
+    main_results,
+    onboarding_results,
+    main_weight=0.7,
+    onboarding_weight=0.3,
+    size=20
+):
+    main_norm = normalize_scores(main_results)
+    onboarding_norm = normalize_scores(onboarding_results)
+
+    merged = {}
+
+    for r in main_norm:
+        isbn = r.get("isbn")
+        if not isbn:
+            continue
+
+        merged[isbn] = {
+            **r,
+            "main_score": r["normalized_score"],
+            "onboarding_score": 0.0,
+            "main_result": r,
+            "onboarding_result": None,
+        }
+
+    for r in onboarding_norm:
+        isbn = r.get("isbn")
+        if not isbn:
+            continue
+
+        if isbn not in merged:
+            merged[isbn] = {
+                **r,
+                "main_score": 0.0,
+                "onboarding_score": r["normalized_score"],
+                "main_result": None,
+                "onboarding_result": r,
+            }
+        else:
+            merged[isbn]["onboarding_score"] = r["normalized_score"]
+            merged[isbn]["onboarding_result"] = r
+
+    final_results = []
+
+    for isbn, item in merged.items():
+        item["score"] = (
+            item["main_score"] * main_weight
+            + item["onboarding_score"] * onboarding_weight
+        )
+        item["source"] = "main_onboarding_weighted"
+        final_results.append(item)
+
+    final_results.sort(key=lambda x: x["score"], reverse=True)
+
+    for i, r in enumerate(final_results[:size], start=1):
+        r["rank"] = i
+
+    return final_results[:size]
+
+def run_with_onboarding(
+    result,
+    search_fn,
+    size=20,
+    main_weight=0.7,
+    onboarding_weight=0.3,
+    **kwargs
+):
+    main_result = result.copy()
+
+    # 검색용 온보딩 신호만 제거하되,
+    # disliked_keywords는 penalty용으로 유지
+    original_onboarding = result.get("onboarding_signals", {})
+    main_result["onboarding_signals"] = {
+        "disliked_keywords": original_onboarding.get("disliked_keywords", [])
+    }
+
+    onboarding_result = make_onboarding_result(result)
+
+    # 온보딩 검색에서도 penalty를 적용하려면 disliked 유지
+    onboarding_result["onboarding_signals"] = {
+        "disliked_keywords": original_onboarding.get("disliked_keywords", [])
+    }
+
+    main_results = search_fn(
+        result=main_result,
+        size=size,
+        **kwargs
+    )
+
+    onboarding_results = search_fn(
+        result=onboarding_result,
+        size=size,
+        **kwargs
+    )
+
+    return merge_weighted_results(
+        main_results=main_results,
+        onboarding_results=onboarding_results,
+        main_weight=main_weight,
+        onboarding_weight=onboarding_weight,
+        size=size
+    )
+
+def full_bm25_with_onboarding(result, size=20, **kwargs):
+    return run_with_onboarding(result, full_bm25, size=size, **kwargs)
+
+def chunk_bm25_with_onboarding(result, size=20, **kwargs):
+    return run_with_onboarding(result, chunk_bm25, size=size, **kwargs)
+
+def full_dense_with_onboarding(result, size=20, **kwargs):
+    return run_with_onboarding(result, full_dense, size=size, **kwargs)
+
+def chunk_dense_with_onboarding(result, size=20, **kwargs):
+    return run_with_onboarding(result, chunk_dense, size=size, **kwargs)
+
+def full_hybrid_with_onboarding(result, size=20, **kwargs):
+    return run_with_onboarding(result, full_hybrid, size=size, **kwargs)
+
+def chunk_hybrid_with_onboarding(result, size=20, **kwargs):
+    return run_with_onboarding(result, chunk_hybrid, size=size, **kwargs)
