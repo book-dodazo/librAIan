@@ -1,0 +1,328 @@
+[
+  {
+    "user_id": "P001-A",
+    "persona": 1,
+    "name": "김지유",
+    "age": 23,
+    "region": "서울 마포구",
+    "recent_liked_books": [
+      { "title": "아무튼, 계속", "author": "김연수" },
+      { "title": "불안의 서", "author": "페르난두 페소아" }
+    ],
+    "preferred_length": "200~300p",
+    "disliked_keywords": ["tense", "dark", "informative"],
+    "frequent_libraries": [
+      "마포구립서강도서관",
+      "이화여자대학교 도서관"
+    ],
+    "preferred_categories": [
+      { "main": "시/에세이", "sub": "테마에세이" },
+      { "main": "소설", "sub": "한국소설" },
+      { "main": "소설", "sub": "프랑스소설" },
+      { "main": "인문", "sub": "심리학" }
+    ]
+  },
+  {
+    "user_id": "P001-B",
+    "persona": 1,
+    "name": "이하린",
+    "age": 21,
+    "region": "서울 서대문구",
+    "recent_liked_books": [
+      { "title": "채식주의자", "author": "한강" },
+      { "title": "소년이 온다", "author": "한강" },
+      { "title": "나는 나로 살기로 했다", "author": "김수현" }
+    ],
+    "preferred_length": "250p 이내",
+    "disliked_keywords": ["challenging", "tense", "adventurous"],
+    "frequent_libraries": [
+      "서대문구립이진아기념도서관",
+      "연세대학교 학술정보원"
+    ],
+    "preferred_categories": [
+      { "main": "소설", "sub": "한국소설" },
+      { "main": "시/에세이", "sub": "나라별 에세이" },
+      { "main": "시/에세이", "sub": "한국시" },
+      { "main": "인문", "sub": "문학이론" }
+    ]
+  },
+  {
+    "user_id": "P001-C",
+    "persona": 1,
+    "name": "오세연",
+    "age": 25,
+    "region": "서울 용산구",
+    "recent_liked_books": [
+      { "title": "82년생 김지영", "author": "조남주" }
+    ],
+    "preferred_length": "300p 이내",
+    "frequent_libraries": [
+      "용산구립중앙도서관",
+      "국립중앙도서관"
+    ],
+    "preferred_categories": [
+      { "main": "소설", "sub": "한국소설" },
+      { "main": "소설", "sub": "일본소설" },
+      { "main": "시/에세이", "sub": "인물/자전적에세이" },
+      { "main": "정치/사회", "sub": "사회문제/복지" }
+    ]
+  },
+  {
+    "user_id": "P002-A",
+    "persona": 2,
+    "name": "박성훈",
+    "age": 38,
+    "region": "경기 수원시",
+    "recent_liked_books": [
+      { "title": "제로 투 원", "author": "피터 틸" },
+      { "title": "원씽", "author": "게리 켈러" },
+      { "title": "생각에 관한 생각", "author": "대니얼 카너먼" }
+    ],
+    "preferred_length": "300p 이내",
+    "disliked_keywords": ["emotional", "sad", "mysterious"],
+    "frequent_libraries": [
+      "수원시립중앙도서관",
+      "경기도사이버도서관"
+    ],
+    "preferred_categories": [
+      { "main": "경제/경영", "sub": "경영전략" },
+      { "main": "경제/경영", "sub": "경영이론" },
+      { "main": "자기계발", "sub": "자기능력계발" },
+      { "main": "인문", "sub": "심리학" }
+    ]
+  },
+  {
+    "user_id": "P002-B",
+    "persona": 2,
+    "name": "최준혁",
+    "age": 42,
+    "region": "경기 성남시",
+    "recent_liked_books": [
+      { "title": "하이아웃풋 매니지먼트", "author": "앤디 그로브" },
+      { "title": "넛지", "author": "리처드 탈러" }
+    ],
+    "preferred_length": "350p 이내",
+    "disliked_keywords": ["funny", "lighthearted", "relaxing"],
+    "frequent_libraries": [
+      "성남시립중앙도서관",
+      "경기도사이버도서관"
+    ],
+    "preferred_categories": [
+      { "main": "경제/경영", "sub": "경영관리" },
+      { "main": "경제/경영", "sub": "마케팅/광고/고객" },
+      { "main": "자기계발", "sub": "비즈니스능력계발" },
+      { "main": "인문", "sub": "심리학" }
+    ]
+  },
+  {
+    "user_id": "P002-C",
+    "persona": 2,
+    "name": "윤재원",
+    "age": 35,
+    "region": "서울 강남구",
+    "recent_liked_books": [
+      { "title": "사피엔스", "author": "유발 하라리" },
+      { "title": "부의 추월차선", "author": "엠제이 드마코" },
+      { "title": "초격차", "author": "권오현" }
+    ],
+    "preferred_length": "300p 이내",
+    "frequent_libraries": [
+      "강남구립도서관",
+      "서울시립중부도서관"
+    ],
+    "preferred_categories": [
+      { "main": "경제/경영", "sub": "경제일반" },
+      { "main": "경제/경영", "sub": "재테크/금융" },
+      { "main": "자기계발", "sub": "성공/처세" },
+      { "main": "역사/문화", "sub": "역사일반" }
+    ]
+  },
+  {
+    "user_id": "P003-A",
+    "persona": 3,
+    "name": "이순자",
+    "age": 67,
+    "region": "서울 은평구",
+    "recent_liked_books": [
+      { "title": "82년생 김지영", "author": "조남주" },
+      { "title": "나는 죽을 때까지 재미있게 살고 싶다", "author": "야마구치 히로코" }
+    ],
+    "preferred_length": "250p 내외",
+    "disliked_keywords": ["dark", "tense", "challenging"],
+    "frequent_libraries": [
+      "은평구립도서관",
+      "서울시립은평도서관"
+    ],
+    "preferred_categories": [
+      { "main": "시/에세이", "sub": "인물/자전적에세이" },
+      { "main": "건강", "sub": "건강일반" },
+      { "main": "인문", "sub": "인문교양총서" },
+      { "main": "소설", "sub": "한국소설" }
+    ]
+  },
+  {
+    "user_id": "P003-B",
+    "persona": 3,
+    "name": "정명희",
+    "age": 63,
+    "region": "서울 노원구",
+    "recent_liked_books": [
+      { "title": "어떻게 살 것인가", "author": "유시민" },
+      { "title": "혼자를 기르는 법", "author": "은유" }
+    ],
+    "preferred_length": "300p 이내",
+    "frequent_libraries": [
+      "노원구립도서관",
+      "불암정보도서관"
+    ],
+    "preferred_categories": [
+      { "main": "인문", "sub": "인문교양총서" },
+      { "main": "시/에세이", "sub": "테마에세이" },
+      { "main": "건강", "sub": "건강일반" },
+      { "main": "역사/문화", "sub": "한국사" }
+    ]
+  },
+  {
+    "user_id": "P003-C",
+    "persona": 3,
+    "name": "한복순",
+    "age": 71,
+    "region": "경기 고양시",
+    "recent_liked_books": null,
+    "preferred_length": "200p 이내",
+    "disliked_keywords": ["dark", "adventurous", "mysterious", "tense"],
+    "frequent_libraries": [
+      "고양시립중앙도서관",
+      "고양시립화정도서관"
+    ],
+    "preferred_categories": [
+      { "main": "건강", "sub": "건강일반" },
+      { "main": "건강", "sub": "자연건강" },
+      { "main": "시/에세이", "sub": "인물/자전적에세이" },
+      { "main": "종교", "sub": "불교" }
+    ]
+  },
+  {
+    "user_id": "P004-A",
+    "persona": 4,
+    "name": "최민준",
+    "age": 16,
+    "region": "서울 노원구",
+    "recent_liked_books": [
+      { "title": "파친코", "author": "이민진" },
+      { "title": "수학의 쓸모", "author": "닉 폴슨, 제임스 스콧" }
+    ],
+    "preferred_length": "제한 없음",
+    "frequent_libraries": [
+      "노원구립도서관",
+      "불암정보도서관"
+    ],
+    "preferred_categories": [
+      { "main": "과학", "sub": "교양과학" },
+      { "main": "과학", "sub": "수학" },
+      { "main": "소설", "sub": "장르소설" },
+      { "main": "역사/문화", "sub": "세계사" }
+    ]
+  },
+  {
+    "user_id": "P004-B",
+    "persona": 4,
+    "name": "장서윤",
+    "age": 15,
+    "region": "서울 강동구",
+    "recent_liked_books": [
+      { "title": "아몬드", "author": "손원평" },
+      { "title": "달러구트 꿈 백화점", "author": "이미예" },
+      { "title": "해리 포터와 마법사의 돌", "author": "J.K. 롤링" }
+    ],
+    "preferred_length": "350p 이내",
+    "disliked_keywords": ["dark", "sad", "tense"],
+    "frequent_libraries": [
+      "강동구립도서관",
+      "강일도서관"
+    ],
+    "preferred_categories": [
+      { "main": "소설", "sub": "장르소설" },
+      { "main": "청소년", "sub": "청소년 소설" },
+      { "main": "과학", "sub": "교양과학" },
+      { "main": "역사/문화", "sub": "세계사" }
+    ]
+  },
+  {
+    "user_id": "P004-C",
+    "persona": 4,
+    "name": "임도현",
+    "age": 17,
+    "region": "경기 용인시",
+    "recent_liked_books": [
+      { "title": "코스모스", "author": "칼 세이건" }
+    ],
+    "preferred_length": "400p 이내",
+    "frequent_libraries": [
+      "용인시립중앙도서관",
+      "용인시립기흥도서관"
+    ],
+    "preferred_categories": [
+      { "main": "과학", "sub": "천문학" },
+      { "main": "과학", "sub": "물리학" },
+      { "main": "과학", "sub": "교양과학" },
+      { "main": "소설", "sub": "영미소설" }
+    ]
+  },
+  {
+    "user_id": "P005-A",
+    "persona": 5,
+    "name": "정다은",
+    "age": 29,
+    "region": "서울 송파구",
+    "recent_liked_books": null,
+    "preferred_length": "200p 이내",
+    "disliked_keywords": ["challenging", "dark", "tense", "sad"],
+    "frequent_libraries": [
+      "송파구립도서관"
+    ],
+    "preferred_categories": [
+      { "main": "시/에세이", "sub": "테마에세이" },
+      { "main": "건강", "sub": "건강일반" },
+      { "main": "자기계발", "sub": "인간관계" }
+    ]
+  },
+  {
+    "user_id": "P005-B",
+    "persona": 5,
+    "name": "강태민",
+    "age": 33,
+    "region": "서울 관악구",
+    "recent_liked_books": null,
+    "preferred_length": "250p 이내",
+    "frequent_libraries": [
+      "관악구립도서관",
+      "서울대학교 중앙도서관"
+    ],
+    "preferred_categories": [
+      { "main": "소설", "sub": "한국소설" },
+      { "main": "시/에세이", "sub": "테마에세이" },
+      { "main": "자기계발", "sub": "인간관계" }
+    ]
+  },
+  {
+    "user_id": "P005-C",
+    "persona": 5,
+    "name": "백수진",
+    "age": 27,
+    "region": "경기 부천시",
+    "recent_liked_books": [
+      { "title": "불편한 편의점", "author": "김호연" }
+    ],
+    "preferred_length": "300p 이내",
+    "frequent_libraries": [
+      "부천시립복사골도서관",
+      "부천시립상동도서관"
+    ],
+    "preferred_categories": [
+      { "main": "소설", "sub": "한국소설" },
+      { "main": "시/에세이", "sub": "테마에세이" },
+      { "main": "자기계발", "sub": "자기능력계발" }
+    ]
+  }
+]
