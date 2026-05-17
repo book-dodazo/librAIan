@@ -32,6 +32,7 @@ from typing import Any, Optional
 
 from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext
+from app.modules.RAG.anchor_book_pipeline import run_anchor_pipeline
 from app.modules.RAG.retriever import full_bm25
 from app.modules.reranker.clova_reranker import (
             call_clova_reranker,
@@ -53,6 +54,9 @@ class PipelineResult:
     """
     # [2] RAG 쿼리 생성 결과
     rag_query: Optional[dict[str, Any]] = None
+
+    # [2-1] Anchor 기반 query rewrite 결과
+    anchor_rewritten: bool = False
 
     # [3] BM25 검색 결과
     # 형태: [{"rank": 1, "isbn": "...", "score": 1.23}, ...]
@@ -106,6 +110,33 @@ async def run_rag_query(context: SessionContext) -> dict[str, Any]:
     logger.info("RAG 쿼리 생성 완료")
     return rag_query
 
+def run_anchor_query_rewrite(rag_query: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """
+    [2-1단계] Anchor 기반 RAG 쿼리 재작성
+
+    rag_query 안에 anchor가 있으면:
+    - anchor 책/작가 정보를 DB에서 조회
+    - HCX-007로 keyword_query, semantic_query 재작성
+    - 기존 rag_query에 덮어쓰기
+
+    anchor가 없으면 원본 rag_query 그대로 반환
+    """
+    if not rag_query:
+        return rag_query, False
+
+    anchor = rag_query.get("anchor")
+
+    if not anchor:
+        return rag_query, False
+
+    try:
+        rewritten = run_anchor_pipeline(rag_query)
+        logger.info("Anchor 기반 query rewrite 완료")
+        return rewritten, True
+
+    except Exception as e:
+        logger.error("Anchor 기반 query rewrite 실패: %s", e, exc_info=True)
+        return rag_query, False
 
 def run_bm25_search(
     rag_query                : dict[str, Any],
@@ -273,6 +304,12 @@ async def run_full_pipeline(
 
     # [2] RAG 쿼리 생성
     result.rag_query = await run_rag_query(context)
+
+    # [2-1] Anchor 기반 query rewrite
+    result.rag_query, result.anchor_rewritten = run_anchor_query_rewrite(
+        rag_query=result.rag_query
+
+    )
 
     # [3] BM25 검색
     result.bm25_results = run_bm25_search(
