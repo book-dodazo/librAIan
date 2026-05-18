@@ -24,6 +24,7 @@ base_url 만 바꿔서 openai Python SDK 를 그대로 재사용합니다.
 """
 import json
 import logging
+import re
 
 from openai import AsyncOpenAI, APIError, AuthenticationError, APITimeoutError
 
@@ -116,40 +117,47 @@ async def chat_complete(
         raise LLMCallError(f"CLOVA Studio API 오류 (status={e.status_code})") from e
 
 
+def _clean_json_response(raw: str) -> str:
+    """LLM 응답에서 JSON만 추출 (코드블록·인라인 주석 제거)."""
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    cleaned = re.sub(r"\s*//[^\n]*", "", cleaned)
+    return cleaned
+
+
 async def chat_complete_json(
     system_prompt: str,
     messages: list[dict],
+    max_retries: int = 2,
     **kwargs,
 ) -> dict:
     """
     JSON 응답을 기대할 때 쓰는 편의 함수.
 
-    LLM 이 JSON 을 반환하도록 프롬프트로 유도하고,
-    파싱에 실패하면 IntentParseError 를 발생시킵니다.
-
-    [FIX] LLM 이 가끔 응답을 ```json ... ``` 코드블록으로 감싸는 경우 처리 강화:
-        - 첫 줄이 ```json 또는 ``` 이면 제거
-        - 마지막 줄이 ``` 이면 제거
-        - 앞뒤 공백 및 개행 제거
+    빈 응답 또는 JSON 파싱 실패 시 max_retries 횟수만큼 재시도합니다.
     """
-    raw = await chat_complete(system_prompt, messages, **kwargs)
+    last_error: Exception | None = None
 
-    cleaned = raw.strip()
+    for attempt in range(max_retries + 1):
+        raw = await chat_complete(system_prompt, messages, **kwargs)
+        cleaned = _clean_json_response(raw)
 
-    # 코드블록 제거
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        # 첫 줄 (```json 또는 ```) 제거
-        lines = lines[1:]
-        # 마지막 줄 (```) 제거
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        cleaned = "\n".join(lines).strip()
+        if not cleaned:
+            last_error = IntentParseError("LLM 응답이 비어있습니다.")
+            logger.warning("LLM 빈 응답 (attempt %d/%d) — 재시도", attempt + 1, max_retries + 1)
+            continue
 
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        logger.warning(
-            "JSON 파싱 실패.\n원본 응답:\n%s\n정제 후:\n%s", raw, cleaned
-        )
-        raise IntentParseError(f"LLM 응답을 JSON으로 파싱 실패: {e}") from e
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            last_error = IntentParseError(f"LLM 응답을 JSON으로 파싱 실패: {e}")
+            logger.warning(
+                "JSON 파싱 실패 (attempt %d/%d).\n원본:\n%s\n정제 후:\n%s",
+                attempt + 1, max_retries + 1, raw, cleaned,
+            )
+
+    raise last_error  # type: ignore[misc]

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: libraian
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          # CI가 kubectl set image 로 커밋 SHA 태그로 교체합니다.
+          # CI가 kubectl set image 로 커밋 SHA 태그로 교체합니다.
+          # YOUR_ACCOUNT_ID → 실제 AWS 계정 ID (12자리)로 교체하세요.
+          image: YOUR_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com/libraian/frontend:latest
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds:       5
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "128Mi"

@@ -44,6 +44,13 @@ from app.modules.slot.schema import SessionContext
 
 logger = logging.getLogger(__name__)
 
+# 대분류 수준 topic 집합 — clarification/chat_service와 동일 기준
+BROAD_TOPICS = {
+    "소설", "인문", "역사", "역사일반", "역사/문화",
+    "컴퓨터/IT", "경제/경영", "자기계발", "과학",
+    "시/에세이", "에세이", "실용",
+}
+
 # reading_level → 자연어 표현
 _LEVEL_LABEL = {
     "easy"  : "가볍고 쉽게 읽히는",
@@ -139,6 +146,9 @@ async def build_rag_query(context: SessionContext) -> dict[str, Any]:
         "session_signals"      : _build_session_signals(context),
         # 온보딩 신호: uncertainty HIGH 슬롯에 한해 온보딩 fallback (Reranker 가중치 낮음)
         "onboarding_signals"   : _build_onboarding_signals(context),
+        # 슬롯 보완 힌트: narrow=해당 슬롯 방향 불확실, verify=inferred 값 재확인 필요
+        # Reranker가 해당 슬롯 값에 낮은 가중치를 적용할 수 있도록 전달
+        "slot_revision_hints"  : context.slot_revision_hints or {},
     }
 
     logger.info("RAG 쿼리 생성 완료: %s", rag_query)
@@ -180,6 +190,9 @@ def _summarize_slots(context: SessionContext) -> str:
         if length_label:
             lines.append(f"분량 - {length_label}")
 
+    if context.onboarding and context.onboarding.get("age") is not None:
+        lines.append(f"사용자 나이 - {context.onboarding['age']}세")
+
     for a in context.anchors:
         lines.append(f"기준 {a.type.value} - {a.value}")
 
@@ -213,6 +226,8 @@ def _summarize_slots(context: SessionContext) -> str:
                 c.operator.value, c.operator.value
             )
             lines.append(f"출판연도 - {c.value}년 {op}")
+        elif c.type == "purpose_context":
+            lines.append(f"독서 맥락 - {c.value}")
         elif c.type == "custom":
             lines.append(f"제약(자연어) - {c.raw or c.value}")
 
@@ -406,10 +421,18 @@ def _apply_refinement(
 
 
 def _anchors_to_list(context: SessionContext) -> Optional[list[dict]]:
-    """anchors → list[dict] 변환"""
-    if not context.anchors:
-        return None
-    return [{"value": a.value, "type": a.type.value} for a in context.anchors]
+    """anchors → list[dict] 변환. topic null 시 recent_liked_books도 anchor로 포함."""
+    result = [{"value": a.value, "type": a.type.value} for a in context.anchors]
+
+    # topic null + profile override: 최근 좋아한 책을 anchor(book_title)로 추가
+    if not context.slots.topic.is_filled() and context.onboarding:
+        recent = context.onboarding.get("recent_liked_books") or []
+        for book in recent[:5]:
+            title = book.get("title") if isinstance(book, dict) else str(book)
+            if title:
+                result.append({"value": title, "type": "book_title"})
+
+    return result or None
 
 
 def _build_session_signals(context: SessionContext) -> dict:
@@ -485,30 +508,36 @@ def _build_onboarding_signals(context: SessionContext) -> dict:
 
     Returns:
         {
-            "topic"             : ["소설", "인문"],                        # preferred_categories 대분류
-            "page_range_soft"   : {"operator": "lte|gte|around", "value": 300},  # preferred_length 파싱 결과
-            "disliked_keywords" : ["dark", "tense"],                       # 온보딩 회피 태그
-            "frequent_libraries": ["마포구립서강도서관"],
+            "preferred_sub_categories": ["한국소설", "프랑스소설"],        # topic이 대분류일 때 프로파일 세부 선호
+            "page_range_soft"         : {"operator": "lte", "value": 300}, # preferred_length 파싱 결과
+            "disliked_keywords"       : ["dark", "tense"],                 # 온보딩 회피 태그
+            "frequent_libraries"      : ["마포구립서강도서관"],
         }
-        온보딩 없거나 모든 슬롯 uncertainty LOW이면 빈 dict 반환
+        온보딩 없으면 빈 dict 반환
     """
     if not context.onboarding:
         return {}
 
-    uncertainty = context.slot_uncertainty
-    ob          = context.onboarding
-    signals     = {}
+    ob      = context.onboarding
+    signals = {}
 
-    # topic: uncertainty HIGH이고 세션에서 안 채워진 경우만
-    if uncertainty.get("topic", "high") == "high" and not context.slots.topic.is_filled():
-        categories = ob.get("preferred_categories", [])
-        if categories:
-            # 대분류 중복 제거해서 전달
-            coarse_list = list(dict.fromkeys(
-                c["main"] for c in categories if c.get("main")
-            ))
-            if coarse_list:
-                signals["topic"] = coarse_list
+    # age: 독자 연령대 신호 — 연령별 추천 보정에 활용
+    age = ob.get("age")
+    if age is not None:
+        signals["age"] = age
+
+    # topic이 대분류 수준일 때 → 프로파일 sub-category를 약한 신호로 추가
+    # "소설 추천해줘" + profile: 한국소설/프랑스소설 선호 → preferred_sub_categories 투입
+    if context.slots.topic.is_filled():
+        fine_set = set(context.slots.topic.fine or [])
+        if fine_set and fine_set.issubset(BROAD_TOPICS):
+            categories = ob.get("preferred_categories", [])
+            relevant_subs = [
+                c["sub"] for c in categories
+                if c.get("main") in fine_set and c.get("sub")
+            ]
+            if relevant_subs:
+                signals["preferred_sub_categories"] = relevant_subs
 
     # disliked_keywords: 충돌 판단 후 조건부 사용
     # 충돌 케이스: "전쟁 역사책" + 온보딩 "너무 잔인한" → 온보딩 비활성
@@ -552,13 +581,19 @@ def _has_avoid_mood_conflict(context: SessionContext, disliked_keywords: list[st
         True = 충돌 있음 → 온보딩 비활성
         False = 충돌 없음 → 온보딩 사용
     """
-    # 충돌 가능성이 있는 주제-회피태그 조합
+    # 충돌 가능성이 있는 주제-회피태그 조합 (한국어 + 영어 온보딩 키워드 모두 지원)
     _CONFLICT_MAP = {
         "너무 잔인한"   : ["전쟁", "역사", "범죄", "스릴러", "공포", "호러"],
         "너무 무거운"   : ["역사", "사회", "정치", "철학", "인문"],
         "너무 우울한"   : ["사회", "인문", "현실", "역사"],
         "너무 불안한"   : ["스릴러", "공포", "범죄"],
         "너무 선정적인" : ["로맨스", "성인"],
+        # 영어 키워드 (user_metadata.json disliked_keywords 실제 값)
+        "tense"         : ["스릴러", "공포", "범죄", "전쟁"],
+        "dark"          : ["공포", "호러", "범죄"],
+        "challenging"   : ["전문서", "학술"],
+        "adventurous"   : [],
+        "informative"   : [],
     }
 
     slots = context.slots

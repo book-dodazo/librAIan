@@ -665,7 +665,14 @@ class SessionContext(BaseModel):
     # LLM 판단 근거 (디버깅/로깅용)
     llm_reasoning       : Optional[str]   = None
 
+    # LLM 충분도 판단 신뢰도 (0~100)
+    # confidence < 70 + rag_ready=true → filler.py에서 false로 override
+    llm_confidence      : int             = 100
+
     # ── 하위 호환 플래그 (llm_slots_to_ask에서 자동 파생) ─────
     needs_subject_clarification     : bool = False
     needs_purpose_clarification     : bool = False
     needs_reading_level_clarification: bool = False
+
+    # 개인화 체크인 턴 완료 여부 (대분류 요청 시 mood 체크인 — 한 세션에 한 번)
+    personalization_turn_done: bool = False

@@ -93,10 +93,12 @@ def build_detail_question_messages(
     if slot_name == "topic_subject":
         topic_info = current_slots.get("topic", {})
         fine_list = topic_info.get("fine", []) if isinstance(topic_info, dict) else []
+        coarse_list = topic_info.get("coarse", []) if isinstance(topic_info, dict) else []
         topic_str = ", ".join(fine_list) if fine_list else "해당 분야"
+        coarse_str = ", ".join(coarse_list) if coarse_list else ""
         content = (
-            f"선택한 주제: {topic_str}\n"
-            f"현재 파악된 정보: {json.dumps(current_slots, ensure_ascii=False)}"
+            f"선택한 주제: {topic_str}"
+            + (f" (대분류: {coarse_str})" if coarse_str else "")
         )
     else:
         purpose_val = current_slots.get("purpose", "학습")
@@ -111,23 +113,29 @@ def build_detail_question_messages(
 def build_question_text_messages(
     slot_name: str,
     current_slots: dict,
+    choices: list[dict] | None = None,
 ) -> tuple[str, list[dict]]:
     """Return the system prompt and messages for one short question sentence."""
     import json
 
-    slot_label = QUESTION_TEXT_SLOT_LABELS.get(slot_name, slot_name)
     context_str = json.dumps(current_slots, ensure_ascii=False) if current_slots else "없음"
+
+    choices_str = ""
+    if choices:
+        labels = [c["label"] for c in choices if c.get("label")]
+        if labels:
+            choices_str = f"\n제시할 선택지: {json.dumps(labels, ensure_ascii=False)}"
 
     messages = [{
         "role": "user",
         "content": (
-            f"현재 파악된 정보: {context_str}\n"
-            f"추가로 확인할 항목: {slot_label}\n\n"
-            f"사용자에게 '{slot_label}'을 선택하도록 유도하는 짧은 질문 문장 하나를 작성하세요.\n"
+            f"현재 파악된 정보: {context_str}"
+            f"{choices_str}\n\n"
+            "위 맥락에서 아래 선택지로 자연스럽게 이어지는 짧은 질문 문장 하나를 작성하세요.\n"
             "규칙:\n"
             "- 반드시 물음표로 끝나는 의문문\n"
-            "- 여러 선택지 중 하나를 고르는 질문 형식\n"
-            "- 답을 미리 가정하지 않기\n"
+            "- 선택지 내용을 미리 언급하거나 가정하지 않기\n"
+            "- 현재 파악된 주제·감정 등과 자연스럽게 연결되는 질문\n"
             "- 질문 문장 하나만 출력"
         ),
     }]
@@ -153,7 +161,6 @@ _GENERAL_QUESTION_SYSTEM = """당신은 도서 추천 시스템의 질문 생성
       "slots": {"<slot명>": "<값>", ...}
     }
   ],
-  "is_escape": false
 }"""
 
 _SLOTS_DESC = {

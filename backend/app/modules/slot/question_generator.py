@@ -65,6 +65,16 @@ _PREDEFINED_CHOICES: dict[str, list[dict]] = {
     ],
 }
 
+_PERSONALIZATION_QUESTION = "지금 어떤 기분으로 읽고 싶으세요?"
+
+_PERSONALIZATION_MOOD_CHOICES: list[dict] = [
+    {"label": "바로 추천해줘", "slots": {}},
+    {"label": "가볍고 즐겁게", "slots": {"mood": "positive_relaxed"}},
+    {"label": "따뜻한 위로가 필요해요", "slots": {"mood": "recovery_comfort"}},
+    {"label": "빠져들고 싶어요", "slots": {"mood": "recovery_escape"}},
+    {"label": "뭔가 배우고 싶은 기분", "slots": {"mood": "recovery_meaning"}},
+]
+
 _TOPIC_BASE_CHOICES: list[dict] = [
     {"label": "소설", "slots": {"topic_fine": "소설"}},
     {"label": "인문", "slots": {"topic_fine": "인문"}},
@@ -89,6 +99,15 @@ class SessionQuestion:
         return {"question": self.question, "choices": self.choices, "slots": self.slots}
 
 
+def generate_personalization_question() -> SessionQuestion:
+    """대분류 요청 시 mood 체크인용 경량 개인화 질문."""
+    return SessionQuestion(
+        _PERSONALIZATION_QUESTION,
+        _PERSONALIZATION_MOOD_CHOICES,
+        ["mood"],
+    )
+
+
 async def generate_question(
     slots_to_ask: list[str],
     context: SessionContext,
@@ -99,7 +118,7 @@ async def generate_question(
     if len(slots_to_ask) == 1 and slots_to_ask[0] == "location":
         return _generate_location_question(context)
 
-    if len(slots_to_ask) == 1 and slots_to_ask[0] in ("topic_subject", "purpose_detail"):
+    if len(slots_to_ask) == 1 and slots_to_ask[0] == "topic_subject":
         return await _generate_detail_question(slots_to_ask[0], context)
 
     current_slots = _context_to_dict(context)
@@ -117,15 +136,29 @@ async def _generate_single_question(
     if slot_name == "topic":
         return await _generate_topic_question(current_slots)
 
+    if slot_name == "comparison_basis":
+        return _generate_comparison_basis_question(current_slots)
+
     predefined = _get_predefined_choices(slot_name, current_slots)
     if not predefined:
         return await _generate_llm_question([slot_name], original_query, current_slots)
 
-    question_text = await _generate_question_text(slot_name, current_slots)
+    question_text = await _generate_question_text(slot_name, current_slots, choices=predefined)
     if not question_text:
         question_text = _default_question_text(slot_name)
 
     return SessionQuestion(question_text, predefined, [slot_name])
+
+
+def _generate_comparison_basis_question(current_slots: dict) -> SessionQuestion:
+    """anchor 이름을 활용한 comparison_basis 질문 — LLM 불필요."""
+    anchor = current_slots.get("anchor", {})
+    anchor_name = anchor.get("value") if isinstance(anchor, dict) else None
+    if anchor_name:
+        question_text = f"'{anchor_name}'의 어떤 점과 비슷한 책을 찾으시나요?"
+    else:
+        question_text = _default_question_text("comparison_basis")
+    return SessionQuestion(question_text, _PREDEFINED_CHOICES["comparison_basis"], ["comparison_basis"])
 
 
 def _get_mood_category(current_slots: dict) -> str:
@@ -308,8 +341,12 @@ async def _generate_llm_question(
         )
 
 
-async def _generate_question_text(slot_name: str, current_slots: dict) -> Optional[str]:
-    system_prompt, messages = build_question_text_messages(slot_name, current_slots)
+async def _generate_question_text(
+    slot_name: str,
+    current_slots: dict,
+    choices: Optional[list[dict]] = None,
+) -> Optional[str]:
+    system_prompt, messages = build_question_text_messages(slot_name, current_slots, choices=choices)
 
     try:
         from app.modules.llm.clova_client import chat_complete
@@ -417,6 +454,16 @@ def apply_choice(
                 library=str(value),
                 source=SlotSource.direct,
             )
+
+        elif slot_name == "mood" and value:
+            from app.modules.slot.schema import MoodCategory, MoodSlot
+            try:
+                slots.mood = MoodSlot(
+                    categories=[MoodCategory(value)],
+                    source=SlotSource.direct,
+                )
+            except ValueError:
+                pass
 
     context.slots = slots
     context.asked_slots.extend(asked_slots)

@@ -33,14 +33,15 @@ ChatService: slot 기반 파이프라인 오케스트레이션
 import json
 import logging
 import os
-from typing import Any, Optional
+from typing import Optional
 
 from app.core.exceptions import LLMCallError
 from app.core.session_logger import SessionLogger
-from app.modules.slot.filler import extract_slots, get_slots_to_ask, is_ready_for_rag
+from app.modules.slot.filler import extract_slots, get_slots_to_ask
 from app.modules.slot.question_generator import (
     SessionQuestion,
     apply_choice,
+    generate_personalization_question,
     generate_question,
 )
 from app.modules.slot.schema import SessionContext, SlotSource
@@ -105,6 +106,11 @@ class ChatService:
             )
             logger.info("선택지 응답 반영: %s", request.selected_choice)
 
+            # 개인화 체크인 답변(mood 선택) → RAG 준비 완료로 표시
+            # fallback이 purpose/reading_level 재질문하는 것을 방지
+            if "mood" in request.pending_slots:
+                context.rag_ready_from_llm = True
+
         else:
             # ── 자유 발화 → slot 추출 ──────────────────────────
             # signal 결과 접근을 위해 detect() 별도 호출
@@ -131,12 +137,29 @@ class ChatService:
 
             sl.update_turn(slots_after=context.slots)
 
-        # inferred 슬롯 분류: HIGH uncertainty → 리셋(세션질문), LOW → 확인
-        inferred = _get_inferred_slots(context)
-        if inferred:
-            inferred, context = _filter_inferred_by_uncertainty(inferred, context)
+        # ── 개인화 체크인 턴 (Rule-based — LLM 게이트 앞에서 실행) ─────
+        # 대분류 요청 + 관련 프로파일 있고 mood 없을 때 → LLM 판단 무관하게 먼저 물어봄
+        # (LLM이 rag_ready=false를 반환해도 fallback이 개인화 질문을 막는 것 방지)
+        if _needs_personalization_turn(context):
+            question = generate_personalization_question()
+            context.personalization_turn_done = True
+            context.asked_slots.append("mood")
+            sl.update_turn(slots_asked=["mood"])
+            sl._flush_turn()
+            return self._build_question_response(context, question, ["mood"], show_choices=True)
 
-        # 세션 질문 우선 (uncertainty HIGH인 빈 슬롯)
+        # ── Profile 기반 RAG override (Rule-based) ────────────────────
+        # Clarification LLM은 슬롯만 판단하므로, 슬롯이 없어도 프로파일로
+        # 방향이 명확한 경우 rule로 override.
+        # 조건: topic/mood/anchor 모두 null + recent_liked_books 2권 이상
+        if _profile_covers_request(context):
+            context.rag_ready_from_llm = True
+            logger.info("profile 기반 RAG override: recent_liked_books 패턴으로 방향 결정")
+
+        # ── 메인 게이트: LLM 충분도 판단 ─────────────────────────
+        # slots_to_ask 있음              → 질문 emit 후 중단
+        # slots_to_ask=[] + rag_ready=false → 질문 소진, RAG 강행
+        # slots_to_ask=[] + rag_ready=true  → 후처리 → RAG
         slots_to_ask = get_slots_to_ask(context)
 
         if slots_to_ask:
@@ -144,18 +167,29 @@ class ChatService:
                 slots_to_ask = slots_to_ask,
                 context      = context,
             )
-            # 질문을 보내는 시점에 asked_slots 업데이트 (자유 발화 응답 실패 시 무한 반복 방지)
             context.asked_slots.extend(slots_to_ask)
             sl.update_turn(slots_asked=slots_to_ask)
             sl._flush_turn()
             return self._build_question_response(context, question, slots_to_ask, show_choices=show_choices_next)
 
-        # LOW uncertainty inferred 슬롯 확인 턴
+        if not context.rag_ready_from_llm:
+            # slots_to_ask=[] 이고 rag_ready=false → 질문 소진, RAG 강행
+            logger.info("질문 소진 (rag_ready=false, slots_to_ask=[]) — RAG 강행")
+            return await self._build_rag_response(context, sl)
+
+        # ── rag_ready=true AND slots_to_ask=[] 이후 처리 ──────
+        # inferred 확인 턴 (LOW uncertainty만 — HIGH는 LLM이 rag_ready 판단 시 반영했어야 함)
+        inferred = _get_inferred_slots(context)
         if inferred:
-            logger.info("inferred slot 확인 턴: %s", inferred)
-            sl.update_turn(slots_asked=["inferred_confirmation"])
-            sl._flush_turn()
-            return self._build_confirmation_response(context, inferred)
+            inferred = [
+                (s, v) for s, v in inferred
+                if context.slot_uncertainty.get(s, "high") != "high"
+            ]
+            if inferred:
+                logger.info("inferred slot 확인 턴: %s", inferred)
+                sl.update_turn(slots_asked=["inferred_confirmation"])
+                sl._flush_turn()
+                return self._build_confirmation_response(context, inferred)
 
         # RAG
         return await self._build_rag_response(context, sl)
@@ -456,34 +490,6 @@ _LEVEL_KO = {
 }
 
 
-def _filter_inferred_by_uncertainty(
-    inferred: list[tuple[str, str]],
-    context : SessionContext,
-) -> tuple[list[tuple[str, str]], SessionContext]:
-    """
-    inferred 슬롯을 uncertainty 기준으로 분류:
-      - HIGH uncertainty → 세션 질문이 필요 → 슬롯 리셋
-      - LOW  uncertainty → LLM 추론 신뢰 가능 → 확인 턴으로 유지
-
-    needs_llm_fallback=True (uncertainty={}) 케이스:
-        신호 미감지 = 방향 불명확 → 전부 HIGH 취급 → 리셋
-    """
-    uncertainty = context.slot_uncertainty
-
-    if not uncertainty:
-        slots_to_reset = [s for s, _ in inferred]
-        context = _reset_slots(context, slots_to_reset)
-        logger.info("needs_llm_fallback: inferred 전부 리셋 → 세션 질문: %s", slots_to_reset)
-        return [], context
-
-    to_confirm = [(s, v) for s, v in inferred if uncertainty.get(s, "high") != "high"]
-    to_reset   = [s      for s, _ in inferred if uncertainty.get(s, "high") == "high"]
-
-    if to_reset:
-        context = _reset_slots(context, to_reset)
-        logger.info("HIGH uncertainty inferred 슬롯 리셋 → 세션 질문: %s", to_reset)
-
-    return to_confirm, context
 
 
 def _get_inferred_slots(context: SessionContext) -> list[tuple[str, str]]:
@@ -624,6 +630,69 @@ _USER_METADATA_PATH = os.path.join(
 
 # 메모리 캐시 — 서버 기동 시 한 번만 로드
 _user_metadata_cache: dict[str, dict] = {}
+
+
+def _profile_covers_request(context: SessionContext) -> bool:
+    """
+    슬롯 없이도 프로파일만으로 RAG 방향이 충분한지 판단.
+
+    조건 (전부 만족해야 True):
+    - topic/mood/anchor 모두 null (슬롯 신호 없음)
+    - recent_liked_books 2권 이상 (구체적 독서 패턴 존재)
+    - Clarification LLM이 rag_ready=False로 판단한 상태 (override 필요한 경우만)
+    """
+    if context.rag_ready_from_llm:
+        return False
+    if context.slots.topic.is_filled():
+        return False
+    if context.slots.mood.is_filled():
+        return False
+    if context.anchors:
+        return False
+    recent = (context.onboarding or {}).get("recent_liked_books") or []
+    return len(recent) >= 2
+
+
+def _needs_personalization_turn(context: SessionContext) -> bool:
+    """
+    개인화 체크인 턴이 필요한지 판단 (Rule-based — LLM 무관).
+
+    조건 (전부 만족해야 True):
+    - 아직 체크인 안 함 (personalization_turn_done=False)
+    - 온보딩 프로파일 있음
+    - mood 미채움
+    - topic이 대분류 수준
+    - preferred_categories가 있으면, 현재 topic의 coarse 카테고리와 일치하는 항목 존재
+      (profile이 현재 요청과 무관하면 mood 물어봐도 개인화 효과 없음)
+    """
+    if context.personalization_turn_done:
+        return False
+    if not context.onboarding:
+        return False
+    if context.slots.mood.is_filled():
+        return False
+
+    from app.modules.slot.filler import STILL_BROAD_FINES
+    fine_set   = set(context.slots.topic.fine   or [])
+    coarse_set = set(context.slots.topic.coarse or [])
+
+    if not fine_set and not coarse_set:
+        return False
+
+    is_broad = (fine_set and fine_set.issubset(STILL_BROAD_FINES)) or (not fine_set and coarse_set)
+    if not is_broad:
+        return False
+
+    # preferred_categories가 있으면 현재 topic과 관련된 카테고리가 있어야 함
+    # (없으면 프로파일이 무관 → 개인화 질문이 의미 없음)
+    preferred = (context.onboarding or {}).get("preferred_categories") or []
+    if preferred:
+        topic_cats = coarse_set | fine_set
+        relevant = any(p.get("main") in topic_cats for p in preferred)
+        if not relevant:
+            return False
+
+    return True
 
 
 def _load_user_metadata() -> dict[str, dict]:

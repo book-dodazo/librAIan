@@ -214,3 +214,6 @@ __marimo__/
 
 # Data
 data/
+
+# K8s 시크릿 — 실제 API 키가 들어가므로 git에 올리지 않음
+k8s/backend-secret.yaml

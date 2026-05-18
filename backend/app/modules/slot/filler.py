@@ -39,6 +39,7 @@ Slot Filler: slot 추출 및 우선순위 결정
     - 연관성 높은 slot끼리 묶어서 한 질문으로 처리 (_group_slots)
 """
 import logging
+import re
 from typing import Optional
 
 from app.core.exceptions import IntentParseError, LLMCallError
@@ -133,7 +134,7 @@ async def extract_slots(
             system_prompt = SLOT_EXTRACTION_SYSTEM_PROMPT,
             messages      = messages,
             temperature   = 0.1,
-            max_tokens    = 600,
+            max_tokens    = 900,
         )
     except (LLMCallError, IntentParseError) as e:
         logger.error("slot 추출 실패: %s", e)
@@ -158,18 +159,29 @@ async def extract_slots(
             max_tokens    = 300,
         )
         context.rag_ready_from_llm  = bool(suf_raw.get("rag_ready", False))
+        context.llm_confidence      = int(suf_raw.get("confidence", 100))
         context.llm_slots_to_ask    = list(suf_raw.get("slots_to_ask") or [])
         context.slot_revision_hints = dict(suf_raw.get("slot_revisions") or {})
         context.llm_reasoning       = suf_raw.get("reasoning")
 
+        # confidence < 70 + rag_ready=true → hallucination 가능성, 보수적으로 차단
+        _CONFIDENCE_THRESHOLD = 70
+        if context.rag_ready_from_llm and context.llm_confidence < _CONFIDENCE_THRESHOLD:
+            logger.info(
+                "confidence=%d < %d — rag_ready=true override to false",
+                context.llm_confidence, _CONFIDENCE_THRESHOLD,
+            )
+            context.rag_ready_from_llm = False
+
         # 하위 호환 플래그 파생 (question_generator가 참조하는 경우 대비)
         context.needs_subject_clarification      = "topic_subject"  in context.llm_slots_to_ask
-        context.needs_purpose_clarification      = "purpose_detail" in context.llm_slots_to_ask
+        context.needs_purpose_clarification      = "purpose" in context.llm_slots_to_ask
         context.needs_reading_level_clarification= "reading_level"  in context.llm_slots_to_ask
 
         logger.info(
-            "충분도 판단: rag_ready=%s slots_to_ask=%s revisions=%s | %s",
+            "충분도 판단: rag_ready=%s confidence=%d slots_to_ask=%s revisions=%s | %s",
             context.rag_ready_from_llm,
+            context.llm_confidence,
             context.llm_slots_to_ask,
             list(context.slot_revision_hints.keys()),
             context.llm_reasoning,
@@ -419,37 +431,104 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
     if raw.get("is_refinement") and context.modification_request is None:
         context.modification_request = "refinement_requested"
 
+    # ── 사후 검증: comparison_basis는 anchor 없이 유효하지 않음 ──
+    # LLM이 comparison_basis만 채우고 anchor를 빠뜨린 경우:
+    # 1) raw 텍스트에서 책 제목/저자를 역방향 추출 시도
+    # 2) 추출 실패 시 comparison_basis 초기화
+    if slots.comparison_basis.is_filled() and not context.anchors:
+        extracted = _extract_anchor_from_raw(slots.comparison_basis.raw)
+        if extracted:
+            context.anchors.append(extracted)
+            logger.info(
+                "comparison_basis.raw에서 anchor 역추출: %s (%s)",
+                extracted.value, extracted.type.value,
+            )
+        else:
+            logger.warning(
+                "comparison_basis 추출됐으나 anchor 역추출 실패 — comparison_basis 초기화"
+            )
+            slots.comparison_basis = ComparisonBasisSlot()
+
     context.slots = slots
     return context
 
 
 # ── 우선순위 결정 ─────────────────────────────────────────────
 
+# fine이 category_tree에 매핑됐지만 의미상 여전히 대분류 수준인 값들
+# Rule [3]에서 topic_subject 강제 질문 트리거로 사용
+STILL_BROAD_FINES: frozenset[str] = frozenset({
+    # 소설 계열 — 장르/국적 불명확
+    "장르소설",          # SF/추리/판타지/로맨스 혼재
+    "세계문학전집",      # 포맷 기반, 주제 없음
+    "고전소설/문학선",   # 고전 전반
+    "그외유럽소설", "기타나라소설",
+    # 인문 계열
+    "인문학일반", "인문고전총서", "인문교양총서",
+    # 역사/문화 계열
+    "역사일반", "문화일반",
+    # 경제/경영 계열
+    "경제일반", "경영일반", "경제이론", "경영이론", "각국경제",
+    # 과학 계열
+    "교양과학", "과학이론", "과학문고",
+    # 자기계발 계열
+    "성공/처세", "자기능력계발", "비즈니스능력계발",
+    # 건강 계열
+    "건강일반", "건강문고",
+    # 취미/실용/스포츠 계열
+    "취미일반", "스포츠", "체육", "레크레이션/게임", "취미관련상품",
+    # 컴퓨터/IT 계열
+    "IT일반",
+    # 종교 계열
+    "종교일반", "그외종교",
+    # 어린이 계열
+    "어린이교양", "어린이문학",
+    # 취업/수험서 계열
+    "국가자격증", "전문직자격증", "취업",
+    # 시/에세이 계열
+    "나라별 에세이", "시/에세이문고", "테마에세이",
+    # 유아 계열
+    "유아교양",
+    # 예술/대중문화 계열
+    "예술일반", "예술문고",
+    # 기술/공학 계열
+    "공학일반",
+    # 만화 계열
+    "캐릭터상품",
+})
+
+# purpose 질문을 생략할 coarse 집합
+# 조건: 해당 카테고리에서 독서 목적이 자명하여 purpose 값이 추천을 실질적으로 바꾸지 않는 경우
+_SKIP_PURPOSE_COARSE: frozenset[str] = frozenset({
+    # 재미/힐링이 전제
+    "소설", "시/에세이", "만화",
+    # 실용이 전제
+    "여행", "요리", "가정/육아", "취미/실용/스포츠",
+    # 학습이 전제 (reading_level이 더 유의미한 구분자)
+    "외국어", "취업/수험서", "ELT/수험서", "대학교재",
+    "초등참고서", "중/고등참고서",
+    # 아동/유아 (목적이 카테고리에 내포됨)
+    "어린이(초등)", "어린이ELT", "유아(0~7세)", "유아/아동/청소년", "청소년",
+    # 목적 구분이 추천 변화를 주지 않는 카테고리
+    "잡지",
+})
+
+
 # priority_conditions 정의 (P3 토론 결과 — slot 패턴 기반)
 # 형식: (조건 딕셔너리, 우선순위 숫자)
 # 숫자가 낮을수록 먼저 질문
 
-_PRIORITY_CONDITIONS: list[tuple[dict, int]] = [
-    # topic만 채워짐 → purpose 1순위
-    ({"topic": "filled", "purpose": "empty"}, 1),
+_PRIORITY_CONDITIONS: list[tuple[dict, str, int]] = [
+    # 아무 신호 없음 → topic 1순위
+    # purpose/mood가 트리거 조건에 포함되지만 타겟은 topic만
+    ({"topic": "empty", "purpose": "empty", "mood": "empty"}, "topic", 1),
 
-    # mood + topic 채워짐 → purpose 2순위
-    ({"mood": "filled", "topic": "filled", "purpose": "empty"}, 2),
+    # purpose만 있고 topic 없음 → topic 1순위
+    # purpose 단독으론 검색 불가 → 구조적 조건
+    ({"purpose": "filled", "topic": "empty"}, "topic", 1),
 
-    # purpose만 채워짐 → topic 1순위
-    ({"purpose": "filled", "topic": "empty"}, 1),
-
-    # 아무것도 채워지지 않음 → topic 1순위 (Broad/Ambiguous)
-    ({"topic": "empty", "purpose": "empty", "mood": "empty"}, 1),
-
-    # topic 기본 우선순위
-    ({"topic": "empty"}, 2),
-
-    # purpose 기본 우선순위
-    ({"purpose": "empty"}, 2),
-
-    # reading_level은 LLM 플래그가 세운 경우에만 질문 대상에 들어오므로 우선순위 2
-    ({"reading_level": "empty"}, 2),
+    # topic 없음 (일반) → topic 2순위
+    ({"topic": "empty"}, "topic", 2),
 ]
 
 
@@ -466,7 +545,86 @@ def get_slots_to_ask(context: SessionContext) -> list[str]:
     """
     asked = set(context.asked_slots)
 
-    # LLM 판단 결과가 있으면 우선 사용 (이미 질문한 슬롯 제외)
+    # ── Rule-based 선행 체크: LLM 판단보다 먼저 실행 ──────────
+
+    fine_set = set(context.slots.topic.fine or [])
+
+    # [1] topic이 채워졌지만 coarse 매핑 실패 → 카테고리 방향 미정
+    # 단, fine이 구체적인 값(STILL_BROAD_FINES 밖)이면 coarse 없이 시맨틱 RAG 가능 → 통과
+    # comparison_basis 또는 anchor가 있으면 raw 자체가 RAG 시맨틱 쿼리로 사용 가능 → 통과
+    if (
+        context.slots.topic.is_filled()
+        and not context.slots.topic.coarse
+        and (not fine_set or fine_set.issubset(STILL_BROAD_FINES))
+        and not context.slots.comparison_basis.is_filled()
+        and not context.anchors
+        and "topic_subject" not in asked
+    ):
+        logger.info("topic.coarse=[] + fine 불명확 — topic_subject 강제 질문 (LLM 판단 무시)")
+        return ["topic_subject"]
+
+    # [2] 기술/학습 계열 topic + reading_level 완전 미채움 (null)
+    # inferred는 슬롯 추출 LLM이 이미 문맥 판단한 값 → rule이 다시 묻지 않음
+    # ("파이썬 기초" → reading_level=easy inferred → 질문 불필요)
+    # 소설/에세이/시는 난이도 편차가 작아 제외
+    # fine이 STILL_BROAD_FINES에 속하면 topic을 먼저 좁혀야 하므로 Rule [3-A]에 위임
+    _SKIP_RL = {"소설", "시/에세이"}
+    coarse_set = set(context.slots.topic.coarse or [])
+    if (
+        coarse_set
+        and not coarse_set.issubset(_SKIP_RL)
+        and not fine_set.issubset(STILL_BROAD_FINES)
+        and not context.slots.reading_level.is_filled()
+        and "reading_level" not in asked
+    ):
+        logger.info("기술/학습 계열 topic + reading_level null — reading_level 강제 질문")
+        return ["reading_level"]
+
+    # [3] fine이 매핑됐지만 의미상 여전히 대분류 수준
+    # mood/anchor가 있으면 보완 신호로 RAG 가능하므로 통과
+    if (
+        fine_set
+        and fine_set.issubset(STILL_BROAD_FINES)
+        and not context.slots.mood.is_filled()
+        and not context.anchors
+        and "topic_subject" not in asked
+    ):
+        logger.info("fine ⊆ STILL_BROAD_FINES 감지 — topic_subject 강제 질문 (LLM 판단 무시)")
+        return ["topic_subject"]
+
+    # [3-B] fine이 specific하게 매핑됐지만 보완 슬롯이 전부 null
+    # purpose null 상태에서 purpose(목적 선택)를 물어야 함
+    # 소설/시·에세이 계열은 "재미"가 기본 전제이므로 purpose 질문 생략
+    # 비소설 계열은 Rule [2]가 reading_level을 먼저 물으므로 이후에 발동
+    if (
+        context.slots.topic.is_filled()
+        and context.slots.topic.coarse
+        and not coarse_set.issubset(_SKIP_PURPOSE_COARSE)
+        and not context.slots.mood.is_filled()
+        and not context.slots.purpose.is_filled()
+        and not context.slots.reading_level.is_filled()
+        and not context.anchors
+        and "purpose" not in asked
+        and "mood" not in asked
+    ):
+        logger.info("fine specific + 보완 슬롯 전부 null — purpose 질문")
+        return ["purpose"]
+
+    # [4] anchor 있음 + comparison_basis가 LLM에 의해 채워졌지만 사용자에게 물어본 적 없음
+    # → "어떤 점이 좋으셨나요?" 로 비교 기준 확인/보강
+    if (
+        context.anchors
+        and context.slots.comparison_basis.is_filled()
+        and "comparison_basis" not in asked
+    ):
+        logger.info("anchor + comparison_basis(미확인) 감지 — 비교 기준 확인 질문")
+        return ["comparison_basis"]
+
+    # LLM holistic judgment: rag_ready=True면 추가 질문 불필요
+    if context.rag_ready_from_llm:
+        return []
+
+    # LLM이 명시한 슬롯 목록 우선 사용 (이미 질문한 슬롯 제외)
     if context.llm_slots_to_ask:
         to_ask = [s for s in context.llm_slots_to_ask if s not in asked]
         if to_ask:
@@ -499,8 +657,8 @@ def _get_slots_to_ask_fallback(context: SessionContext) -> list[str]:
 
     if context.needs_subject_clarification and "topic_subject" not in asked:
         empty.add("topic_subject")
-    if context.needs_purpose_clarification and "purpose_detail" not in asked:
-        empty.add("purpose_detail")
+    if context.needs_purpose_clarification and "purpose" not in asked:
+        empty.add("purpose")
     if (
         context.needs_reading_level_clarification
         and not slots.reading_level.is_filled()
@@ -535,11 +693,9 @@ def _get_slots_to_ask_fallback(context: SessionContext) -> list[str]:
                 return False
         return True
 
-    for condition, priority in _PRIORITY_CONDITIONS:
-        if _check_pattern(condition):
-            for slot_name, state in condition.items():
-                if state == "empty" and slot_name in empty:
-                    slot_priorities[slot_name] = min(slot_priorities.get(slot_name, 999), priority)
+    for condition, target_slot, priority in _PRIORITY_CONDITIONS:
+        if _check_pattern(condition) and target_slot in empty:
+            slot_priorities[target_slot] = min(slot_priorities.get(target_slot, 999), priority)
 
     if "comparison_basis" in empty:
         slot_priorities["comparison_basis"] = 1
@@ -600,6 +756,26 @@ def is_ready_for_rag(context: SessionContext) -> bool:
 
 
 # ── 헬퍼 함수 ─────────────────────────────────────────────────
+
+# "드래곤 라자 같은", "기억 전달자처럼", "무라카미 하루키와 비슷한" 패턴에서 앞부분 추출
+_ANCHOR_FROM_CB_PATTERN = re.compile(
+    r'^(.+?)\s*(?:와|과|이랑|랑)?\s*(?:같은|비슷한|유사한|처럼)',
+    re.UNICODE,
+)
+
+
+def _extract_anchor_from_raw(raw: Optional[str]) -> Optional[Anchor]:
+    """comparison_basis.raw에서 anchor(책 제목/작가명)를 역방향으로 추출."""
+    if not raw:
+        return None
+    m = _ANCHOR_FROM_CB_PATTERN.match(raw.strip())
+    if not m:
+        return None
+    candidate = m.group(1).strip()
+    if len(candidate) < 2:
+        return None
+    return Anchor(value=candidate, type=AnchorType.book_title)
+
 
 def _parse_source(raw: Optional[str]) -> SlotSource:
     """문자열 → SlotSource 변환 (실패 시 null)"""
