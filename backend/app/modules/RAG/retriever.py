@@ -207,14 +207,14 @@ def make_onboarding_result(result):
     semantic_query = result.get("semantic_query", "").strip()
 
     # 온보딩 검색에만 reading_level 추가
-    # if reading_level:
-    #     level_text = READING_LEVEL_TEXT.get(reading_level, reading_level)
-    #     keyword_query.append(level_text)
+    if reading_level:
+        level_text = READING_LEVEL_TEXT.get(reading_level, reading_level)
+        keyword_query.append(level_text)
 
-    #     if semantic_query:
-    #         semantic_query = semantic_query + " " + level_text
-    #     else:
-    #         semantic_query = level_text
+        if semantic_query:
+            semantic_query = semantic_query + " " + level_text
+        else:
+            semantic_query = level_text
 
     onboarding_result = {
         "keyword_query": keyword_query,
@@ -308,6 +308,33 @@ def apply_dense_disliked_penalty(
 
     return results
 
+# 성인 사용자는 유아나 청소년 카테고리 제외
+ADULT_EXCLUDE_CATEGORIES = [
+    "고등학교 참고서",
+    "어린이",
+    "유아",
+    "청소년",
+    "중학교 참고서",
+    "초등학교 참고서",
+]
+
+
+def should_exclude_youth_categories(result):
+    age = result.get("onboarding_signals", {}).get("age")
+    if age is None or age < 20:
+        return False
+
+    requested_large_cates = (
+        result.get("filters", {}).get("cate_depth1")
+        or []
+    )
+
+    # 사용자가 명시적으로 어린이/청소년/참고서 계열을 요청했다면 제외하지 않음
+    if any(cate in ADULT_EXCLUDE_CATEGORIES for cate in requested_large_cates):
+        return False
+
+    return True
+
 #==================================================================
 #                            BM25 full
 #==================================================================
@@ -364,6 +391,13 @@ def full_bm25(
     filter_clause = []
     should_clause = []
     must_not_clause = []
+
+    if should_exclude_youth_categories(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
 
     if coarse_categories:
         filter_clause.append({
@@ -652,6 +686,13 @@ def chunk_bm25(
     filter_clause = []
     should_clause = []
     must_not_clause = []
+
+    if should_exclude_youth_categories(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
 
     if coarse_categories:
         filter_clause.append({
@@ -948,6 +989,13 @@ def full_dense(
     filter_clause = []
     must_not_clause = []
 
+    if should_exclude_youth_categories(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
     if coarse_categories:
         filter_clause.append({
             "terms": {
@@ -1179,6 +1227,13 @@ def chunk_dense(
 
     filter_clause = []
     must_not_clause = []
+
+    if should_exclude_youth_categories(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
 
     if coarse_categories:
         filter_clause.append({
@@ -1472,13 +1527,14 @@ def normalize_scores(results, score_key="score"):
 def full_hybrid(
     result,
     size=20,
-    bm25_weight=0.5,
-    dense_weight=0.5,
     bm25_candidate_size=100,
     dense_candidate_size=100,
     num_candidates=300,
     require_both=False,
-    overlap_bonus=0.1,
+    overlap_bonus=0.0,
+    rrf_k=60,
+    bm25_weight=1.0,
+    dense_weight=1.0,
     small_category_embeddings=None
 ):
     if small_category_embeddings is None:
@@ -1504,51 +1560,63 @@ def full_hybrid(
         small_category_embeddings=small_category_embeddings
     )
 
-    bm25_norm = normalize_scores(bm25_results)
-    dense_norm = normalize_scores(dense_results)
-
     merged = {}
 
-    for r in bm25_norm:
+    # =========================
+    # BM25 결과 병합
+    # =========================
+    for rank, r in enumerate(bm25_results, start=1):
         isbn = r["isbn"]
 
         if isbn not in merged:
             merged[isbn] = {
                 **r,
-                "bm25_score": 0.0,
-                "dense_score": 0.0,
+                "bm25_rank": None,
+                "dense_rank": None,
                 "bm25_raw_score": None,
                 "dense_raw_score": None,
                 "bm25_result": None,
                 "dense_result": None,
+                "bm25_rrf_score": 0.0,
+                "dense_rrf_score": 0.0,
             }
 
         fill_metadata(merged[isbn], r)
 
-        merged[isbn]["bm25_score"] = r["normalized_score"]
-        merged[isbn]["bm25_raw_score"] = r["score"]
+        merged[isbn]["bm25_rank"] = rank
+        merged[isbn]["bm25_raw_score"] = r.get("score")
         merged[isbn]["bm25_result"] = r
+        merged[isbn]["bm25_rrf_score"] = bm25_weight * (1 / (rrf_k + rank))
 
-    for r in dense_norm:
+    # =========================
+    # Dense 결과 병합
+    # =========================
+    for rank, r in enumerate(dense_results, start=1):
         isbn = r["isbn"]
 
         if isbn not in merged:
             merged[isbn] = {
                 **r,
-                "bm25_score": 0.0,
-                "dense_score": 0.0,
+                "bm25_rank": None,
+                "dense_rank": None,
                 "bm25_raw_score": None,
                 "dense_raw_score": None,
                 "bm25_result": None,
                 "dense_result": None,
+                "bm25_rrf_score": 0.0,
+                "dense_rrf_score": 0.0,
             }
 
         fill_metadata(merged[isbn], r)
 
-        merged[isbn]["dense_score"] = r["normalized_score"]
-        merged[isbn]["dense_raw_score"] = r["score"]
+        merged[isbn]["dense_rank"] = rank
+        merged[isbn]["dense_raw_score"] = r.get("score")
         merged[isbn]["dense_result"] = r
+        merged[isbn]["dense_rrf_score"] = dense_weight * (1 / (rrf_k + rank))
 
+    # =========================
+    # 최종 RRF 점수 계산
+    # =========================
     final_results = []
 
     for isbn, item in merged.items():
@@ -1558,10 +1626,7 @@ def full_hybrid(
         if require_both and not (has_bm25 and has_dense):
             continue
 
-        score = (
-            item["bm25_score"] * bm25_weight
-            + item["dense_score"] * dense_weight
-        )
+        score = item["bm25_rrf_score"] + item["dense_rrf_score"]
 
         if has_bm25 and has_dense:
             score += overlap_bonus
@@ -1569,7 +1634,7 @@ def full_hybrid(
         item["score"] = score
         item["has_bm25"] = has_bm25
         item["has_dense"] = has_dense
-        item["source"] = "hybrid_full"
+        item["source"] = "hybrid_full_rrf"
 
         final_results.append(item)
 
@@ -1587,12 +1652,15 @@ def full_hybrid(
 def chunk_hybrid(
     result,
     size=20,
-    bm25_weight=0.5,
-    dense_weight=0.5,
+    bm25_weight=1.0,
+    dense_weight=1.0,
     bm25_candidate_size=100,
     dense_candidate_size=100,
     num_candidates=300,
     top_k_per_book=3,
+    require_both=False,
+    overlap_bonus=0.0,
+    rrf_k=60,
     small_category_embeddings=None
 ):
     if small_category_embeddings is None:
@@ -1617,57 +1685,78 @@ def chunk_hybrid(
         small_category_embeddings=small_category_embeddings
     )
 
-    bm25_norm = normalize_scores(bm25_results)
-    dense_norm = normalize_scores(dense_results)
-
     merged = {}
 
-    for r in bm25_norm:
+    # =========================
+    # BM25 결과 병합
+    # =========================
+    for rank, r in enumerate(bm25_results, start=1):
         isbn = r["isbn"]
 
         if isbn not in merged:
             merged[isbn] = {
                 **r,
-                "bm25_score": 0.0,
-                "dense_score": 0.0,
+                "bm25_rank": None,
+                "dense_rank": None,
                 "bm25_raw_score": None,
                 "dense_raw_score": None,
                 "bm25_result": None,
                 "dense_result": None,
+                "bm25_rrf_score": 0.0,
+                "dense_rrf_score": 0.0,
             }
 
-        merged[isbn]["bm25_score"] = r["normalized_score"]
-        merged[isbn]["bm25_raw_score"] = r["score"]
+        merged[isbn]["bm25_rank"] = rank
+        merged[isbn]["bm25_raw_score"] = r.get("score")
         merged[isbn]["bm25_result"] = r
+        merged[isbn]["bm25_rrf_score"] = bm25_weight * (1 / (rrf_k + rank))
 
-    for r in dense_norm:
+    # =========================
+    # Dense 결과 병합
+    # =========================
+    for rank, r in enumerate(dense_results, start=1):
         isbn = r["isbn"]
 
         if isbn not in merged:
             merged[isbn] = {
                 **r,
-                "bm25_score": 0.0,
-                "dense_score": 0.0,
+                "bm25_rank": None,
+                "dense_rank": None,
                 "bm25_raw_score": None,
                 "dense_raw_score": None,
                 "bm25_result": None,
                 "dense_result": None,
+                "bm25_rrf_score": 0.0,
+                "dense_rrf_score": 0.0,
             }
 
-        merged[isbn]["dense_score"] = r["normalized_score"]
-        merged[isbn]["dense_raw_score"] = r["score"]
+        merged[isbn]["dense_rank"] = rank
+        merged[isbn]["dense_raw_score"] = r.get("score")
         merged[isbn]["dense_result"] = r
+        merged[isbn]["dense_rrf_score"] = dense_weight * (1 / (rrf_k + rank))
 
     final_results = []
 
+    # =========================
+    # 최종 RRF 점수 계산
+    # =========================
     for isbn, item in merged.items():
-        hybrid_score = (
-            item["bm25_score"] * bm25_weight
-            + item["dense_score"] * dense_weight
-        )
+        has_bm25 = item["bm25_result"] is not None
+        has_dense = item["dense_result"] is not None
 
-        item["score"] = hybrid_score
-        item["source"] = "hybrid_chunk"
+        if require_both and not (has_bm25 and has_dense):
+            continue
+
+        score = item["bm25_rrf_score"] + item["dense_rrf_score"]
+
+        if has_bm25 and has_dense:
+            score += overlap_bonus
+
+        item["score"] = score
+        item["has_bm25"] = has_bm25
+        item["has_dense"] = has_dense
+        item["source"] = "hybrid_chunk_rrf"
+
         final_results.append(item)
 
     final_results.sort(key=lambda x: x["score"], reverse=True)
@@ -1754,6 +1843,7 @@ def run_with_onboarding(
     # disliked_keywords는 penalty용으로 유지
     original_onboarding = result.get("onboarding_signals", {})
     main_result["onboarding_signals"] = {
+        "age": original_onboarding.get("age"),
         "disliked_keywords": original_onboarding.get("disliked_keywords", [])
     }
 
@@ -1761,6 +1851,7 @@ def run_with_onboarding(
 
     # 온보딩 검색에서도 penalty를 적용하려면 disliked 유지
     onboarding_result["onboarding_signals"] = {
+        "age": original_onboarding.get("age"),
         "disliked_keywords": original_onboarding.get("disliked_keywords", [])
     }
 
@@ -1801,3 +1892,52 @@ def full_hybrid_with_onboarding(result, size=20, **kwargs):
 
 def chunk_hybrid_with_onboarding(result, size=20, **kwargs):
     return run_with_onboarding(result, chunk_hybrid, size=size, **kwargs)
+
+test_result = {
+    "keyword_query": ["철학", "에세이"],
+    "semantic_query": "삶을 돌아보게 하는 철학 에세이",
+    "filters": {
+        "cate_depth1": ["시/에세이"]
+    },
+    "constraints": {},
+    "score_boost": {
+        "cate_depth2": ["철학"],
+        "subject": ["자아성찰", "삶", "철학적 사유"]
+    },
+    "availability_required": False,
+    "anchor": None,
+
+    # 세션에서는 난이도 언급 없음
+    "session_signals": {
+        "purpose": "교양",
+        "mood": "calm",
+        "location": {},
+        "avoid_mood": [],
+        "length": "short",
+        "comparison_basis": None
+    },
+
+    # 온보딩 기반 난이도
+    "onboarding_signals": {
+        "age": 23,
+        "reading_level": "easy",
+        #"topic": ["시/에세이"],
+        "disliked_keywords": [],
+        "frequent_libraries": [],
+        "length_soft": {
+            "operator": "lte",
+            "value": 300
+        }
+    }
+}
+
+results = full_hybrid_with_onboarding(test_result, size=10)
+
+for r in results:
+    print(
+        r["title"],
+        r.get("large_cate"),
+        r.get("page"),
+        "main:", round(r.get("main_score", 0), 4),
+        "onboarding:", round(r.get("onboarding_score", 0), 4),
+    )
