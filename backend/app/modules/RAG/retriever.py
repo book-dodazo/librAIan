@@ -53,13 +53,9 @@ def get_small_category_embeddings():
 def make_headers():
 
     return {
-
         "Authorization": f"Bearer {CLOVA_API_KEY}",
-
         "X-NCP-CLOVASTUDIO-REQUEST-ID": str(uuid.uuid4()),
-
         "Content-Type": "application/json"
-
     }
 
 def get_embedding(text, max_retries=10, timeout=30):
@@ -316,6 +312,7 @@ ADULT_EXCLUDE_CATEGORIES = [
     "청소년",
     "중학교 참고서",
     "초등학교 참고서",
+    "수험서/자격증"
 ]
 
 
@@ -1892,52 +1889,3 @@ def full_hybrid_with_onboarding(result, size=20, **kwargs):
 
 def chunk_hybrid_with_onboarding(result, size=20, **kwargs):
     return run_with_onboarding(result, chunk_hybrid, size=size, **kwargs)
-
-test_result = {
-    "keyword_query": ["철학", "에세이"],
-    "semantic_query": "삶을 돌아보게 하는 철학 에세이",
-    "filters": {
-        "cate_depth1": ["시/에세이"]
-    },
-    "constraints": {},
-    "score_boost": {
-        "cate_depth2": ["철학"],
-        "subject": ["자아성찰", "삶", "철학적 사유"]
-    },
-    "availability_required": False,
-    "anchor": None,
-
-    # 세션에서는 난이도 언급 없음
-    "session_signals": {
-        "purpose": "교양",
-        "mood": "calm",
-        "location": {},
-        "avoid_mood": [],
-        "length": "short",
-        "comparison_basis": None
-    },
-
-    # 온보딩 기반 난이도
-    "onboarding_signals": {
-        "age": 23,
-        "reading_level": "easy",
-        #"topic": ["시/에세이"],
-        "disliked_keywords": [],
-        "frequent_libraries": [],
-        "length_soft": {
-            "operator": "lte",
-            "value": 300
-        }
-    }
-}
-
-results = full_hybrid_with_onboarding(test_result, size=10)
-
-for r in results:
-    print(
-        r["title"],
-        r.get("large_cate"),
-        r.get("page"),
-        "main:", round(r.get("main_score", 0), 4),
-        "onboarding:", round(r.get("onboarding_score", 0), 4),
-    )
