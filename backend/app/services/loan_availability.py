@@ -15,11 +15,6 @@ import requests
 
 BOOK_EXIST_URL = "http://data4library.kr/api/bookExist"
 
-
-# --------------------------------------------------
-# 1. 단건 조회
-# --------------------------------------------------
-
 def check_loan_availability(
     isbn: str,
     lib_code: str,
@@ -62,11 +57,6 @@ def check_loan_availability(
             "error": str(exc),
         }
 
-
-# --------------------------------------------------
-# 2. 배치 조회
-# --------------------------------------------------
-
 def check_books_availability(
     isbns: List[str],
     lib_code: str,
@@ -74,22 +64,12 @@ def check_books_availability(
 ) -> Dict[str, Dict[str, Any]]:
     """
     ISBN 목록에 대해 일괄로 대출 가능 여부를 조회한다.
-
-    반환 예시:
-    {
-        "9788937473135": {"isbn": "...", "has_book": "Y", "loan_available": "N"},
-        ...
-    }
     """
     availability_index: Dict[str, Dict[str, Any]] = {}
     for isbn in isbns:
         availability_index[isbn] = check_loan_availability(isbn, lib_code, auth_key)
     return availability_index
 
-
-# --------------------------------------------------
-# 3. 결과 출력 헬퍼
-# --------------------------------------------------
 
 def print_results_with_availability(
     reranked_books: List[Dict[str, Any]],
@@ -126,11 +106,6 @@ def print_results_with_availability(
         print(f"       대출현황: {avail_str}")
         print()
 
-
-# --------------------------------------------------
-# 4. 실행 예시
-# --------------------------------------------------
-
 if __name__ == "__main__":
     import json
     import psycopg2
@@ -139,7 +114,7 @@ if __name__ == "__main__":
 
     load_dotenv(Path(__file__).parents[2] / ".env")  # backend/.env
 
-    from backend.app.models.clova_reranker import (
+    from backend.app.modules.reranker.clova_reranker import (
         call_clova_reranker,
         create_payload_and_rerank,
     )

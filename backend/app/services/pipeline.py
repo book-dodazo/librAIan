@@ -5,8 +5,8 @@
 # 변경 이력:
 #   v0.1 - 최초 작성
 #          chat_service.py에서 파이프라인 단계 분리
-#   v0.2 - Reranker 연동 (app/models/clova_reranker.py)
-#          availability 조회 연동 (app/models/loan_availability.py)
+#   v0.2 - Reranker 연동 (app/modules/reranker/clova_reranker.py)
+#          availability 조회 연동 (app/services/loan_availability.py)
 #
 # 새 단계 추가 방법:
 #   1. 아래에 async def run_xxx() 또는 def run_xxx() 추가
@@ -32,6 +32,13 @@ from typing import Any, Optional
 
 from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext
+from app.modules.RAG.anchor_book_pipeline import run_anchor_pipeline
+from app.modules.RAG.retriever import full_bm25
+from app.modules.reranker.clova_reranker import (
+            call_clova_reranker,
+            create_payload_and_rerank,
+        )
+from app.services.loan_availability import check_books_availability
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,9 @@ class PipelineResult:
     # [2] RAG 쿼리 생성 결과
     rag_query: Optional[dict[str, Any]] = None
 
+    # [2-1] Anchor 기반 query rewrite 결과
+    anchor_rewritten: bool = False
+
     # [3] BM25 검색 결과
     # 형태: [{"rank": 1, "isbn": "...", "score": 1.23}, ...]
     bm25_results: list[dict] = field(default_factory=list)
@@ -60,32 +70,54 @@ class PipelineResult:
     # 형태: {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
     availability_index: dict[str, dict] = field(default_factory=dict)
 
+    # context.slots.availability_required 값 — final_results 필터링 기준
+    availability_required: bool = False
+
     # 에러 발생 단계 기록 (디버깅용)
     errors: list[str] = field(default_factory=list)
 
     @property
     def final_results(self) -> list[dict]:
         """
-        최종 결과 반환
+        최종 결과 반환 — 3-시나리오 필터링
 
-        availability_required=True 인 경우 대출 불가 도서 제외
-        reranked_results 있으면 reranked, 없으면 bm25_results 사용
+        availability_index 없음 → Top3 그대로 반환
+        [Scenario C] availability_required=True → 대출가능 Top3만
+        [Scenario A] 1등 대출가능              → 대출가능 Top3만
+        [Scenario B] 1등 대출불가              → 대출가능 Top3 + 1등 추가
         """
         base = self.reranked_results if self.reranked_results else self.bm25_results
 
         if not self.availability_index:
-            return base
+            return base[:3]
 
-        # 대출 가능 여부 정보 붙이기
-        result = []
+        # 대출 가능 여부 정보 부착
+        books_with_avail = []
         for book in base:
             isbn  = book.get("isbn", "")
             avail = self.availability_index.get(isbn, {})
-            result.append({
+            books_with_avail.append({
                 **book,
                 "has_book"      : avail.get("has_book", "-"),
                 "loan_available": avail.get("loan_available", "-"),
             })
+
+        available = [b for b in books_with_avail if b.get("loan_available") == "Y"]
+        top3      = available[:3]
+
+        # [Scenario C]
+        if self.availability_required:
+            return top3
+
+        # [Scenario A] 1등이 대출가능이면 Top3만
+        rank1 = books_with_avail[0] if books_with_avail else None
+        if not rank1 or rank1.get("loan_available") == "Y":
+            return top3
+
+        # [Scenario B] 1등이 대출불가면 Top3 + 1등 추가
+        result = list(top3)
+        if rank1 not in result:
+            result.append(rank1)
         return result
 
 
@@ -97,6 +129,33 @@ async def run_rag_query(context: SessionContext) -> dict[str, Any]:
     logger.info("RAG 쿼리 생성 완료")
     return rag_query
 
+def run_anchor_query_rewrite(rag_query: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """
+    [2-1단계] Anchor 기반 RAG 쿼리 재작성
+
+    rag_query 안에 anchor가 있으면:
+    - anchor 책/작가 정보를 DB에서 조회
+    - HCX-007로 keyword_query, semantic_query 재작성
+    - 기존 rag_query에 덮어쓰기
+
+    anchor가 없으면 원본 rag_query 그대로 반환
+    """
+    if not rag_query:
+        return rag_query, False
+
+    anchor = rag_query.get("anchor")
+
+    if not anchor:
+        return rag_query, False
+
+    try:
+        rewritten = run_anchor_pipeline(rag_query)
+        logger.info("Anchor 기반 query rewrite 완료")
+        return rewritten, True
+
+    except Exception as e:
+        logger.error("Anchor 기반 query rewrite 실패: %s", e, exc_info=True)
+        return rag_query, False
 
 def run_bm25_search(
     rag_query                : dict[str, Any],
@@ -111,18 +170,14 @@ def run_bm25_search(
     모듈이 없으면 빈 리스트 반환 (graceful skip).
     """
     try:
-        from app.modules.RAG.BM25 import search_bm25_with_cate
-        results = search_bm25_with_cate(
-            result                   = rag_query,
-            small_category_embeddings= small_category_embeddings,
-            index_name               = index_name,
-            size                     = size,
+        results = full_bm25(
+            result                   = rag_query
         )
         logger.info("BM25 검색 완료: %d건", len(results))
         return results
 
     except ImportError:
-        logger.warning("BM25 모듈 없음 (app/modules/RAG/BM25.py) — 검색 스킵")
+        logger.warning("BM25 모듈 없음 (app/modules/RAG/retriever.py) — 검색 스킵")
         return []
     except Exception as e:
         logger.error("BM25 검색 실패: %s", e, exc_info=True)
@@ -137,7 +192,7 @@ def run_reranker(
     """
     [4단계] CLOVA Reranker (B파트 연동)
 
-    app/models/clova_reranker.py의
+    app/modules/reranker/clova_reranker.py의
     create_payload_and_rerank() + call_clova_reranker()를 호출합니다.
 
     clova_api_key 없으면 payload 생성까지만 하고 BM25 결과 그대로 반환.
@@ -156,11 +211,6 @@ def run_reranker(
         return []
 
     try:
-        from app.models.clova_reranker import (
-            call_clova_reranker,
-            create_payload_and_rerank,
-        )
-
         # rag_query를 reranker가 기대하는 reconstructed_session 형태로 전달
         reconstructed_session = rag_query
 
@@ -195,7 +245,7 @@ def run_reranker(
         return reranked
 
     except ImportError:
-        logger.warning("Reranker 모듈 없음 (app/models/clova_reranker.py) — 스킵")
+        logger.warning("Reranker 모듈 없음 (app/modules/reranker/clova_reranker.py) — 스킵")
         return []
     except Exception as e:
         logger.error("Reranking 실패: %s", e)
@@ -211,7 +261,7 @@ def run_availability(
     """
     [5단계] 정보나루 API 대출 가능 여부 조회
 
-    app/models/loan_availability.py의 check_books_availability()를 호출합니다.
+    app/services/loan_availability.py의 check_books_availability()를 호출합니다.
 
     Args:
         books        : final_results 후보 도서 목록
@@ -235,15 +285,13 @@ def run_availability(
         return {}
 
     try:
-        from app.models.loan_availability import check_books_availability
-
         isbns  = [b.get("isbn", "") for b in books if b.get("isbn")]
         result = check_books_availability(isbns, _lib_code, _api_key)
         logger.info("대출 가능 여부 조회 완료: %d건", len(result))
         return result
 
     except ImportError:
-        logger.warning("loan_availability 모듈 없음 (app/models/loan_availability.py) — 스킵")
+        logger.warning("loan_availability 모듈 없음 (app/services/loan_availability.py) — 스킵")
         return {}
     except Exception as e:
         logger.error("대출 가능 여부 조회 실패: %s", e)
@@ -276,6 +324,12 @@ async def run_full_pipeline(
     # [2] RAG 쿼리 생성
     result.rag_query = await run_rag_query(context)
 
+    # [2-1] Anchor 기반 query rewrite
+    result.rag_query, result.anchor_rewritten = run_anchor_query_rewrite(
+        rag_query=result.rag_query
+
+    )
+
     # [3] BM25 검색
     result.bm25_results = run_bm25_search(
         rag_query                = result.rag_query,
@@ -288,10 +342,9 @@ async def run_full_pipeline(
         rag_query    = result.rag_query,
     )
 
-    # [5] 대출 가능 여부 조회
-    # availability_required=True 면 항상 조회
-    # False 면 조회는 하되 final_results에서 필터링은 안 함 (표시만)
-    candidate_books = result.reranked_results or result.bm25_results
+    # [5] 대출 가능 여부 조회 — 리랭킹 Top10 대상
+    candidate_books = (result.reranked_results or result.bm25_results)[:10]
+    result.availability_required = context.slots.availability_required
     result.availability_index = run_availability(
         books        = candidate_books,
         lib_code     = lib_code,
