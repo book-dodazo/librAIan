@@ -105,10 +105,10 @@
     "turns": [
       {
         "turn": 1,
-        "user_input": "장하주 스타일의 경영 리더십 책 추천해줘. 토머스 블레인 매코믹 책은 다 읽었으니까 빼줘",
+        "user_input": "장하준 스타일의 경영 리더십 책 추천해줘. 토머스 블레인 매코믹 책은 다 읽었으니까 빼줘",
         "key_signals": ["CAT8_REFERENCE (스타일)", "CAT9_AVOID (빼줘)", "CAT5_TOPIC (경영 리더십)"],
         "slot_changes": {
-          "anchor": { "value": "장하주", "type": "author" },
+          "anchor": { "value": "장하준", "type": "author" },
           "topic": { "coarse": ["경제/경영"], "fine": ["경영관리"], "subject": ["리더십"], "source": "inferred" },
           "constraints": [
             { "type": "author_non", "value": "피터 드러커", "operator": "exclude", "raw": "블레인 매코믹 책 제외" }
@@ -136,11 +136,11 @@
         "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
         "rag_query": {
           "keyword_query": ["리더십", "경영관리", "실무", "조직관리"],
-          "semantic_query": "장하주 스타일의 실무에 바로 적용할 수 있는 경영 리더십 책, 블레인 매코믹 제외",
+          "semantic_query": "장하준 스타일의 실무에 바로 적용할 수 있는 경영 리더십 책, 블레인 매코믹 제외",
           "filters": { "cate_depth1": ["경제/경영"] },
           "constraints": { "author_non": ["블레인 매코믹"] },
           "score_boost": { "cate_depth2": ["경영관리"] },
-          "anchor": { "value": "장하주", "type": "author" },
+          "anchor": { "value": "장하준", "type": "author" },
           "session_signals": { "purpose": "실용" },
           "onboarding_signals": {
             "age": 42,
@@ -148,7 +148,7 @@
             "page_length_soft": { "operator": "lte", "value": 350 }
           }
         },
-        "system_response": "장하주 스타일 실무형 리더십 책이에요. 블레인 매코믹은 제외했어요.\n1. 『팀장의 탄생』 줄리 주오\n2. 『일의 격』 신수정\n3. 『하버드 리더십 수업』 존 코터"
+        "system_response": "장하준 스타일 실무형 리더십 책이에요. 블레인 매코믹은 제외했어요.\n1. 『팀장의 탄생』 줄리 주오\n2. 『일의 격』 신수정\n3. 『하버드 리더십 수업』 존 코터"
       }
     ]
   },
@@ -213,7 +213,7 @@
         },
         "rag_query": {
           "keyword_query": ["우주", "교양과학"],
-          "semantic_query": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 교양과학 시리즈, 2015년 이후 400p 이하",
+          "semantic_query": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 교양과학 책, 2015년 이후 400p 이하",
           "filters": { "cate_depth1": ["과학"] },
           "constraints": {
             "pub_year": [{ "operator": "gte", "value": 2015 }],
@@ -578,11 +578,11 @@
     "turns": [
       {
         "turn": 1,
-        "user_input": "파친코 같은 역사소설 추천해줘. 세계사 배경이면 좋겠고 청소년도 읽을 수 있는 거로. 400페이지 이하로",
+        "user_input": "하룻밤에 읽는 광개토대왕 같은 역사소설 추천해줘. 세계사 배경이면 좋겠고 청소년도 읽을 수 있는 거로. 400페이지 이하로",
         "key_signals": ["CAT8_REFERENCE (같은)", "CAT5_TOPIC (역사소설, 세계사)", "CAT3_SHORT (400페이지 이하)"],
         "slot_changes": {
-          "anchor": { "value": "파친코", "type": "book_title" },
-          "topic": { "coarse": ["소설"], "fine": ["장르소설"], "subject": ["역사소설", "세계사"], "source": "direct" },
+          "anchor": { "value": "하룻밤에 읽는 광개토대왕", "type": "book_title" },
+          "topic": { "coarse": ["소설"], "fine": ["장르소설"], "subject": ["역사소설", "한국사"], "source": "direct" },
           "constraints": [
             { "type": "page_range", "operator": "lte", "value": 400, "raw": "400페이지 이하" },
             { "type": "target_reader", "value": "청소년 이상", "operator": "eq", "raw": "청소년도 읽을 수 있는" }
@@ -593,9 +593,9 @@
         "sufficiency_judgment": {
           "rag_ready": false,
           "slots_to_ask": ["comparison_basis"],
-          "reason": "anchor 있으나 파친코의 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
+          "reason": "anchor 있으나 하룻밤에 읽는 광개토대왕의 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
         },
-        "system_response": "파친코에서 특히 어떤 점이 좋으셨나요?\n[ 역사적 배경 ] [ 인물들의 이야기 ] [ 가족 서사 ] [ 감동적인 장면들 ]"
+        "system_response": "하룻밤에 읽는 광개토대왕에서 특히 어떤 점이 좋으셨나요?\n[ 역사적 배경 ] [ 인물들의 이야기 ] [ 가족 서사 ] [ 감동적인 장면들 ]"
       },
       {
         "turn": 2,
@@ -609,10 +609,10 @@
           "slots_to_ask": [],
           "reason": "anchor + comparison_basis(topic·mood) + COMPLEX constraints + target_reader 채워짐 — RAG 진행"
         },
-        "onboarding_note": "preferred_length 제한없음 → page_length_soft 없음. onboarding 장르소설·세계사 선호 일치",
+        "onboarding_note": "preferred_length 제한없음 → page_length_soft 없음. onboarding 장르소설·한국사 선호 일치",
         "rag_query": {
-          "keyword_query": ["역사소설", "세계사", "인물", "청소년"],
-          "semantic_query": "파친코처럼 역사 속 인물들의 삶을 다룬 세계사 배경 역사소설, 청소년 이상 400p 이하",
+          "keyword_query": ["역사소설", "한국사", "인물", "청소년"],
+          "semantic_query": "하룻밤에 읽는 광개토대왕처럼 역사 속 인물들의 삶을 다룬 세계사 배경 역사소설, 청소년 이상 400p 이하",
           "filters": {
             "cate_depth1": ["소설"],
             "target_reader": ["청소년 이상"]
@@ -621,13 +621,13 @@
             "page_range": [{ "operator": "lte", "value": 400 }]
           },
           "score_boost": { "cate_depth2": ["장르소설"] },
-          "anchor": { "value": "파친코", "type": "book_title" },
+          "anchor": { "value": "하룻밤에 읽는 광개토대왕", "type": "book_title" },
           "session_signals": {
             "comparison_basis": { "dimensions": ["topic", "mood"], "raw": "인물 중심 역사 서사" }
           },
           "onboarding_signals": {"age": 16}
         },
-        "system_response": "파친코처럼 역사 속 인물들의 삶에 집중한 역사소설이에요.\n1. 『천 개의 찬란한 태양』 할레드 호세이니 (372p)\n2. 『뿌리』 알렉스 헤일리 (396p)\n3. 『링컨 고속도로』 에이모 토울스 (384p)"
+        "system_response": "하룻밤에 읽는 광개토대왕처럼 역사 속 인물들의 삶에 집중한 역사소설이에요.\n1. 『천 개의 찬란한 태양』 할레드 호세이니 (372p)\n2. 『뿌리』 알렉스 헤일리 (396p)\n3. 『링컨 고속도로』 에이모 토울스 (384p)"
       }
     ]
   },
@@ -1126,19 +1126,19 @@
     "turns": [
       {
         "turn": 1,
-        "user_input": "넛지처럼 생각하게 만드는 책 없어? 요즘 좀 무기력해서",
+        "user_input": "생각에 관한 생각처럼 생각하게 만드는 책 없어? 요즘 좀 무기력해서",
         "key_signals": ["CAT8_REFERENCE (처럼)", "CAT1_NEGATIVE (무기력)", "CAT1_PASSIVE"],
         "slot_changes": {
-          "anchor": { "value": "넛지", "type": "book_title" },
+          "anchor": { "value": "생각에 관한 생각", "type": "book_title" },
           "mood": { "categories": ["negative_passive"], "raw": "요즘 좀 무기력해서", "source": "direct" },
           "comparison_basis": { "dimensions": [], "raw": null, "source": "null" }
         },
         "sufficiency_judgment": {
           "rag_ready": false,
           "slots_to_ask": ["comparison_basis"],
-          "reason": "anchor 있으나 넛지의 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
+          "reason": "anchor 있으나 생각에 관한 생각의 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
         },
-        "system_response": "넛지에서 특히 어떤 점이 좋으셨나요?\n[ 행동경제학 통찰 ] [ 실생활 적용 가능성 ] [ 읽기 쉬운 점 ] [ 주제·소재 ]"
+        "system_response": "생각에 관한 생각에서 특히 어떤 점이 좋으셨나요?\n[ 행동경제학 통찰 ] [ 실생활 적용 가능성 ] [ 읽기 쉬운 점 ] [ 주제·소재 ]"
       },
       {
         "turn": 2,
@@ -1146,7 +1146,7 @@
         "key_signals": ["CAT2_PRACTICAL (바로 적용)", "CAT5_TOPIC (심리·행동)"],
         "slot_changes": {
           "comparison_basis": { "dimensions": ["topic"], "raw": "실용적인 심리·행동 인사이트", "source": "direct" },
-          "topic": { "coarse": ["인문", "경제/경영"], "fine": ["심리학", "경영이론"], "subject": ["행동경제학", "심리", "습관"], "source": "inferred" },
+          "topic": { "coarse": ["인문"], "fine": ["심리학"], "subject": [ "심리", "습관"], "source": "inferred" },
           "purpose": { "value": "실용", "source": "inferred" },
           "mood": { "categories": ["negative_passive", "recovery_meaning"], "source": "direct" }
         },
@@ -1157,12 +1157,12 @@
         },
         "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
         "rag_query": {
-          "keyword_query": ["행동경제학", "심리", "습관", "실용"],
-          "semantic_query": "넛지처럼 일상에서 바로 적용할 수 있는 심리·행동경제학 책, 무기력할 때 동기부여가 되는",
-          "filters": { "cate_depth1": ["인문", "경제/경영"] },
+          "keyword_query": ["심리", "습관", "실용"],
+          "semantic_query": "생각에 관한 생각처럼 일상에서 바로 적용할 수 있는 심리·행동경제학 책, 무기력할 때 동기부여가 되는",
+          "filters": { "cate_depth1": ["인문"] },
           "constraints": {},
-          "score_boost": { "cate_depth2": ["심리학", "경영이론"], "subject": ["행동경제학", "습관"] },
-          "anchor": { "value": "넛지", "type": "book_title" },
+          "score_boost": { "cate_depth2": ["심리학"], "subject": ["습관"] },
+          "anchor": { "value": "생각에 관한 생각", "type": "book_title" },
           "session_signals": {
             "mood": ["negative_passive", "recovery_meaning"],
             "purpose": "실용",
@@ -1174,7 +1174,7 @@
             "page_length_soft": { "operator": "lte", "value": 350 }
           }
         },
-        "system_response": "넛지처럼 실용적인 심리·행동경제학 책이에요.\n1. 『생각에 관한 생각』 대니얼 카너먼\n2. 『습관의 힘』 찰스 두히그\n3. 『선택의 역설』 배리 슈워츠"
+        "system_response": "생각에 관한 생각처럼 실용적인 심리·행동경제학 책이에요.\n1. 『생각에 관한 생각』 대니얼 카너먼\n2. 『습관의 힘』 찰스 두히그\n3. 『선택의 역설』 배리 슈워츠"
       }
     ]
   },
