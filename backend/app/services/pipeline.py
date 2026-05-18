@@ -79,26 +79,45 @@ class PipelineResult:
     @property
     def final_results(self) -> list[dict]:
         """
-        최종 결과 반환
+        최종 결과 반환 — 3-시나리오 필터링
 
-        availability_required=True 인 경우 대출 불가 도서 제외
-        reranked_results 있으면 reranked, 없으면 bm25_results 사용
+        availability_index 없음 → Top3 그대로 반환
+        [Scenario C] availability_required=True → 대출가능 Top3만
+        [Scenario A] 1등 대출가능              → 대출가능 Top3만
+        [Scenario B] 1등 대출불가              → 대출가능 Top3 + 1등 추가
         """
         base = self.reranked_results if self.reranked_results else self.bm25_results
 
         if not self.availability_index:
-            return base
+            return base[:3]
 
-        # 대출 가능 여부 정보 붙이기
-        result = []
+        # 대출 가능 여부 정보 부착
+        books_with_avail = []
         for book in base:
             isbn  = book.get("isbn", "")
             avail = self.availability_index.get(isbn, {})
-            result.append({
+            books_with_avail.append({
                 **book,
                 "has_book"      : avail.get("has_book", "-"),
                 "loan_available": avail.get("loan_available", "-"),
             })
+
+        available = [b for b in books_with_avail if b.get("loan_available") == "Y"]
+        top3      = available[:3]
+
+        # [Scenario C]
+        if self.availability_required:
+            return top3
+
+        # [Scenario A] 1등이 대출가능이면 Top3만
+        rank1 = books_with_avail[0] if books_with_avail else None
+        if not rank1 or rank1.get("loan_available") == "Y":
+            return top3
+
+        # [Scenario B] 1등이 대출불가면 Top3 + 1등 추가
+        result = list(top3)
+        if rank1 not in result:
+            result.append(rank1)
         return result
 
 
@@ -323,10 +342,9 @@ async def run_full_pipeline(
         rag_query    = result.rag_query,
     )
 
-    # [5] 대출 가능 여부 조회
-    # availability_required=True 면 항상 조회
-    # False 면 조회는 하되 final_results에서 필터링은 안 함 (표시만)
-    candidate_books = result.reranked_results or result.bm25_results
+    # [5] 대출 가능 여부 조회 — 리랭킹 Top10 대상
+    candidate_books = (result.reranked_results or result.bm25_results)[:10]
+    result.availability_required = context.slots.availability_required
     result.availability_index = run_availability(
         books        = candidate_books,
         lib_code     = lib_code,
