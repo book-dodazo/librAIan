@@ -172,11 +172,6 @@
       <input class="config-input" id="api-url-input" type="text" value="http://localhost:8000">
       <button class="config-save" onclick="saveApiUrl()">저장</button>
     </div>
-    <div class="section-label">사용자 프로필</div>
-    <div class="config-row">
-      <input class="config-input" id="user-id-input" type="text" placeholder="예: P001-A">
-      <button class="config-save" onclick="saveUserId()">적용</button>
-    </div>
 
     <div class="section-label">빠른 예시</div>
     <ul class="quick-list">
@@ -184,7 +179,6 @@
       <li><button class="quick-btn" onclick="sendQuick('SF랑 추리소설 추천해줘')">복수 주제 추천</button></li>
       <li><button class="quick-btn" onclick="sendQuick('한강 작가 책 추천해줘')">작가 기반 추천</button></li>
       <li><button class="quick-btn" onclick="sendQuick('불편한 편의점 같은 책')">유사 도서 추천</button></li>
-      <li><button class="quick-btn" onclick="sendQuick('지금 대출 가능한 가벼운 소설 추천해줘')">대출 가능 추천</button></li>
       <li><button class="quick-btn" onclick="sendQuick('책 추천해줘')">모호한 질의</button></li>
     </ul>
 
@@ -238,15 +232,13 @@
 
 <script>
   // ── 상태 ─────────────────────────────────────────────────
-  let apiBase      = localStorage.getItem('apiBase') || 'http://localhost:8000';
-  let userId       = localStorage.getItem('demoUserId') || 'P001-A';
+  let apiBase      = localStorage.getItem('apiBase') || '{{ apiBase }}';
   let history      = [];
   let context      = null;   // SessionContext — 매 응답마다 갱신
   let pendingSlots = [];     // 마지막 질문이 채우려는 slot 목록
   let isLoading    = false;
 
   document.getElementById('api-url-input').value = apiBase;
-  document.getElementById('user-id-input').value = userId;
   document.getElementById('api-url-display').textContent = apiBase.replace('http://', '');
   checkHealth();
 
@@ -255,12 +247,6 @@
     localStorage.setItem('apiBase', apiBase);
     document.getElementById('api-url-display').textContent = apiBase.replace('http://', '');
     checkHealth();
-  }
-
-  function saveUserId() {
-    userId = document.getElementById('user-id-input').value.trim();
-    if (userId) localStorage.setItem('demoUserId', userId);
-    else localStorage.removeItem('demoUserId');
   }
 
   async function checkHealth() {
@@ -357,21 +343,11 @@
   // ── API 호출 공통 ─────────────────────────────────────────
   async function callApi(body, loadingId, userText) {
     try {
-      const activeUserId = document.getElementById('user-id-input').value.trim();
-      if (activeUserId) {
-        userId = activeUserId;
-        localStorage.setItem('demoUserId', userId);
-        body.user_profile = { user_id: userId };
-      } else {
-        localStorage.removeItem('demoUserId');
-        body.user_profile = null;
-      }
-
       const res = await fetch(`${apiBase}/api/chat`, {
         method : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body   : JSON.stringify(body),
-        signal : AbortSignal.timeout(90000),
+        signal : AbortSignal.timeout(300000),
       });
 
       removeLoading(loadingId);
@@ -426,11 +402,6 @@
           return lv[slots.reading_level?.value] || null;
       }},
       { label: 'mood',    get: () => slots.mood?.value || null },
-      { label: 'location', get: () => {
-          const loc = slots.location;
-          if (!loc) return null;
-          return loc.library || loc.region || null;
-      }},
     ];
 
     bar.innerHTML = '<span class="slot-bar-label">Slots</span>';
@@ -558,8 +529,8 @@
       const rows    = [];
       if (q.semantic_query)               rows.push(['semantic',     q.semantic_query]);
       if (q.keyword_query?.length)        rows.push(['keywords',     q.keyword_query.join(', ')]);
-      if (q.filters?.cate_depth1?.length) rows.push(['대분류(cate_depth1)', q.filters.cate_depth1.join(', ')]);
-      if (q.score_boost?.cate_depth2?.length) rows.push(['중분류(cate_depth2)', q.score_boost.cate_depth2.join(', ')]);
+      if (q.filters?.coarse_category?.length) rows.push(['대분류 필터', q.filters.coarse_category.join(', ')]);
+      if (q.score_boost?.fine_category?.length) rows.push(['중분류 boost', q.score_boost.fine_category.join(', ')]);
       if (q.constraints?.page_range?.length) rows.push(['페이지', q.constraints.page_range.map(r => {
         const op = {'lte':'이하','lt':'미만','gte':'이상','gt':'초과'}[r.operator] || r.operator;
         return `${r.value}페이지 ${op}`;

@@ -30,7 +30,6 @@ CLOVA_RERANKER_URL = "https://clovastudio.stream.ntruss.com/v1/api-tools/reranke
 # 1. 공통 유틸
 # --------------------------------------------------
 
-
 def normalize_score(value: float, min_value: float, max_value: float) -> float:
     """검색 점수를 0~1 범위로 정규화한다."""
     if max_value == min_value:
@@ -58,12 +57,12 @@ def fetch_books_by_isbn(isbns: List[str]) -> Dict[str, Dict[str, Any]]:
     }
     """
     conn_kwargs: Dict[str, Any] = {
-        "dbname": os.getenv("POSTGRES_DB", "book_db"),
-        "host": os.getenv("POSTGRES_HOST", "localhost"),
-        "port": os.getenv("POSTGRES_PORT", "5432"),
-        "user": os.getenv("POSTGRES_USER", os.getenv("USER", "parkdahyeon")),
+        "dbname": os.getenv("DB_NAME"),
+        "host": os.getenv("DB_HOST"),
+        "port": os.getenv("DB_PORT"),
+        "user": os.getenv("DB_USER"),
     }
-    password = os.getenv("POSTGRES_PASSWORD", "")
+    password = os.getenv("DB_PASSWORD", "")
     if password:
         conn_kwargs["password"] = password
 

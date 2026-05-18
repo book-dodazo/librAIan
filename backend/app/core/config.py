@@ -39,12 +39,20 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
 
-
+    # ── Elasticsearch ───────────────────────────────────────
     ELASTIC_URL: str
-
     ELASTIC_USER: str
-
     ELASTIC_PASSWORD: str
+
+    # ── PostgreSQL ───────────────────────────────────────
+    DB_HOST: str
+    DB_PORT: str
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str
+
+    # ── AWS ──────────────────────────────────────────────
+    AWS_PUBLIC_IP: str
 
     # ── 앱 일반 ──────────────────────────────────────────────
     APP_ENV: str = "development"

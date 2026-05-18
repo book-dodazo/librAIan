@@ -12,7 +12,7 @@ FastAPI 앱 진입점
 
 실행 방법:
     # conda 환경 활성화 후 backend 폴더에서
-    uvicorn app.main:app --reload --port 8000
+    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 접속:
     API 문서 (Swagger UI) : http://localhost:8000/docs
@@ -23,6 +23,10 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+from fastapi import Request
+from pathlib import Path
 
 from app.core.config import settings
 from app.api.routes.chat import router as chat_router
@@ -61,11 +65,19 @@ app.add_middleware(
 # ── 라우터 등록 ───────────────────────────────────────────────
 app.include_router(chat_router)
 
+# ── 템플릿 설정 ───────────────────────────────────────────────
+templates = Jinja2Templates(directory="app/templates")
 
-@app.get("/", include_in_schema=False)
-async def root():
-    return {
-        "message": "📚 AI 도서 큐레이션 API 실행 중",
-        "docs": "/docs",
-        "health": "/api/health",
-    }
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    api_base = (
+        f"http://{settings.AWS_PUBLIC_IP}:8000"
+        if settings.AWS_PUBLIC_IP
+        else "http://localhost:8000"
+    )
+    return templates.TemplateResponse(
+        name = "index.html", 
+        request = request,
+        context = {"apiBase": api_base}
+    )
