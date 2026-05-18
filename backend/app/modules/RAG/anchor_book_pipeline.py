@@ -144,7 +144,7 @@ def search_anchor_book(anchor: dict):
         query = """
         SELECT *
         FROM books
-        WHERE LOWER(TRIM(title)) = LOWER(TRIM(%s))        
+        WHERE title ILIKE %s       
         LIMIT 1
         """
 
