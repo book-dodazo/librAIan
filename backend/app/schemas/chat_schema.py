@@ -54,6 +54,7 @@ class ChatRequest(BaseModel):
     confirm_inferred: Optional[bool]            = Field(default=None)
 
 
+
 class SlotChatResponse(BaseModel):
     """
     POST /api/chat 응답 바디

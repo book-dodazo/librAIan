@@ -1,0 +1,1282 @@
+[
+
+  {
+    "user_id": "P001-A",
+    "name": "김지유 (23세, 서울 마포구)",
+    "scenario_type": "부정 정서 → 장르 좁히기 → Refinement → 대출 → anchor",
+    "query_specificity": "두리뭉실",
+    "turn_count": 6,
+    "onboarding": {
+      "preferred_length": "300p 이하",
+      "disliked_keywords": ["tense", "dark", "informative"],
+      "frequent_libraries": ["마포구립서강도서관", "이화여자대학교 도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "소설",     "sub": "한국소설" },
+        { "main": "소설",     "sub": "프랑스소설" },
+        { "main": "인문",     "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "요즘 너무 지쳐서 읽을 책 추천해줘",
+        "key_signals": ["CAT1_NEGATIVE (지치)"],
+        "slot_changes": {
+          "mood": { "category": "negative_exhausted", "raw": "너무 지쳐서", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "mood 명확하나 topic 전혀 없음 — 장르 없이 RAG 진행 시 품질 저하"
+        },
+        "onboarding_note": "topic 미채움 + uncertainty HIGH → onboarding topic ['시/에세이','소설','인문'] 보조 신호 활성",
+        "system_response": "어떤 장르로 읽고 싶으세요?\n[ 소설 ] [ 에세이 ] [ 시집 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "소설로",
+        "key_signals": ["CAT5_FORMAT (소설)", "CAT5_LEISURE (소설) → purpose.uncertainty=LOW"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설/에세이"], "fine": ["소설"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "한국/영미/장르소설 세분화 필요" } },
+          "reason": "'소설'은 장르가 너무 넓어 한국/영미/장르소설로 추천이 완전히 달라짐"
+        },
+        "system_response": "어떤 소설을 찾고 계세요?\n[ 한국소설 ] [ 영미소설 ] [ 일본소설 ] [ 장르소설 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "한국 소설이요",
+        "key_signals": ["CAT5_LEISURE (소설) → purpose.uncertainty=LOW 유지"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설/에세이"], "fine": ["한국소설"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "한국소설로 충분히 좁혀짐. mood 명확. purpose는 leisure 형식이라 질문 불필요"
+        },
+        "onboarding_note": "topic 채워짐 → topic uncertainty LOW → onboarding topic 제외. disliked_keywords·length_soft 유지",
+        "rag_query": {
+          "keyword_query": ["한국소설", "위로", "따뜻한"],
+          "semantic_query": "지쳐 있을 때 위로가 되는 한국소설, 가볍게 읽을 수 있는",
+          "filters": { "cate_depth1": ["소설/에세이"] },
+          "score_boost": { "cate_depth2": ["한국소설"] },
+          "session_signals": { "mood": "negative_exhausted" },
+          "onboarding_signals": { "disliked_keywords": ["tense","dark","informative"], "length_soft": "medium" }
+        },
+        "system_response": "지쳐 있을 때 읽기 좋은 한국소설이에요.\n1. 『불편한 편의점』 김호연\n2. 『나는 나로 살기로 했다』 김수현\n3. 『아무튼, 계속』 김연수"
+      },
+      {
+        "turn": 4,
+        "user_input": "너무 무거운 건 빼줘, 300페이지 넘는 것도",
+        "key_signals": ["CAT9_AVOID (빼줘)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["너무 무거운"], "source": "direct" },
+          "constraints": [{ "type": "page_range", "operator": "lte", "value": 300 }],
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 기존 슬롯 유지, 조건만 추가"
+        },
+        "rag_query": {
+          "semantic_query": "지쳐 있을 때 위로가 되는 가볍고 따뜻한 한국소설 (너무 무거운 제외)",
+          "constraints": { "page_range": [{ "operator": "lte", "value": 300 }] },
+          "session_signals": { "mood": "negative_exhausted", "avoid_mood": ["너무 무거운"] },
+          "onboarding_signals": { "disliked_keywords": ["tense","dark","informative"], "length_soft": "medium" }
+        },
+        "system_response": "무겁지 않고 300페이지 이하인 한국소설로 다시 찾았어요.\n1. 『불편한 편의점』 김호연 — 244p\n2. 『오늘의 운세』 구병모 — 272p\n3. 『에디』 서유미 — 288p"
+      },
+      {
+        "turn": 5,
+        "user_input": "마포구립서강도서관에서 지금 빌릴 수 있는 걸로 보여줘",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (마포구립서강도서관)"],
+        "slot_changes": {
+          "location": { "library": "마포구립서강도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "location 명확, availability 요청 — RAG + 도서관 API 조회"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries ['마포구립서강도서관','이화여자대학교 도서관'] 활성화",
+        "rag_query": {
+          "availability_required": true,
+          "session_signals": { "mood": "negative_exhausted", "avoid_mood": ["너무 무거운"], "location": { "library": "마포구립서강도서관" } },
+          "onboarding_signals": { "disliked_keywords": ["tense","dark","informative"], "length_soft": "medium", "frequent_libraries": ["마포구립서강도서관","이화여자대학교 도서관"] }
+        },
+        "system_response": "마포구립서강도서관 대출 가능한 책만 골랐어요.\n1. 『불편한 편의점』 — 대출 가능\n2. 『오늘의 운세』 — 대출 가능\n3. 『에디』 — 대출 중 (예약 가능)"
+      },
+      {
+        "turn": 6,
+        "user_input": "불편한 편의점이랑 비슷한 느낌 작가 책 또 있어?",
+        "key_signals": ["CAT8_REFERENCE (비슷한)"],
+        "slot_changes": {
+          "anchor": { "value": "김호연", "type": "author" },
+          "comparison_basis": { "dimensions": ["mood"], "raw": "비슷한 느낌", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor(김호연 작가) + comparison_basis(분위기) 모두 채워짐"
+        },
+        "rag_query": {
+          "filters": { "cate_depth1": ["소설/에세이"], "author": "김호연" },
+          "anchor": { "value": "김호연", "type": "author" },
+          "session_signals": { "mood": "negative_exhausted", "avoid_mood": ["너무 무거운"], "location": { "library": "마포구립서강도서관" }, "comparison_basis": { "dimensions": ["mood"], "raw": "비슷한 느낌" } }
+        },
+        "system_response": "김호연 작가의 다른 책 중 마포구립서강도서관 대출 가능한 것이에요.\n1. 『보도블록 위의 삶』 — 대출 가능\n2. 『파친코 골목』 — 예약 가능"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P001-B",
+    "name": "이하린 (21세, 서울 서대문구)",
+    "scenario_type": "anchor + comparison_basis 즉시 완성 → 대출 필터",
+    "query_specificity": "매우 구체적",
+    "turn_count": 2,
+    "onboarding": {
+      "preferred_length": "250p 이하",
+      "disliked_keywords": ["challenging", "tense", "adventurous"],
+      "frequent_libraries": ["서대문구립이진아기념도서관", "연세대학교 학술정보원"],
+      "preferred_categories": [
+        { "main": "소설",   "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "나라별 에세이" },
+        { "main": "시/에세이", "sub": "한국시" },
+        { "main": "인문",   "sub": "문학이론" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "채식주의자처럼 강렬하고 문학적인 소설 추천해줘",
+        "key_signals": ["CAT8_REFERENCE (처럼)", "CAT5_FORMAT (소설)", "CAT5_LEISURE (소설)"],
+        "slot_changes": {
+          "anchor": { "value": "채식주의자", "type": "book_title" },
+          "comparison_basis": { "dimensions": ["mood", "style"], "raw": "강렬하고 문학적인", "source": "direct" },
+          "topic": { "coarse": ["소설/에세이"], "fine": ["한국소설"], "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(mood·style) 모두 채워짐. 1턴에 RAG 진행"
+        },
+        "onboarding_note": "topic이 inferred로 채워짐 → uncertainty LOW로 판단 → onboarding topic 미사용. disliked_keywords 보조 신호 활성",
+        "rag_query": {
+          "keyword_query": ["한국소설", "강렬한", "문학적", "채식주의자"],
+          "semantic_query": "채식주의자처럼 강렬하고 문학적 문체의 한국소설",
+          "filters": { "cate_depth1": ["소설/에세이"], "title": "채식주의자" },
+          "score_boost": { "cate_depth2": ["한국소설"] },
+          "anchor": { "value": "채식주의자", "type": "book_title" },
+          "session_signals": { "comparison_basis": { "dimensions": ["mood","style"], "raw": "강렬하고 문학적인" } },
+          "onboarding_signals": { "disliked_keywords": ["challenging","tense","adventurous"], "length_soft": "easy" }
+        },
+        "system_response": "채식주의자처럼 강렬한 소설이에요.\n1. 『소년이 온다』 한강\n2. 『흰』 한강\n3. 『아몬드』 손원평"
+      },
+      {
+        "turn": 2,
+        "user_input": "서대문구립이진아기념도서관에서 빌릴 수 있는 걸로",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (서대문구립이진아기념도서관)"],
+        "slot_changes": {
+          "location": { "library": "서대문구립이진아기념도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터 추가"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 활성화",
+        "system_response": "서대문구립이진아기념도서관 대출 가능한 것만요.\n1. 『소년이 온다』 — 대출 가능\n2. 『아몬드』 — 대출 중 (예약 가능)\n3. 『흰』 — 대출 가능"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P001-C",
+    "name": "오세연 (25세, 서울 용산구)",
+    "scenario_type": "넓은 장르 → 주제 방향 → 세분화 → 출판연도 Refinement",
+    "query_specificity": "중간",
+    "turn_count": 4,
+    "onboarding": {
+      "preferred_length": "300p",
+      "disliked_keywords": [],
+      "frequent_libraries": ["용산구립중앙도서관", "국립중앙도서관"],
+      "preferred_categories": [
+        { "main": "소설",      "sub": "한국소설" },
+        { "main": "소설",      "sub": "일본소설" },
+        { "main": "시/에세이", "sub": "인물/자전적에세이" },
+        { "main": "정치/사회", "sub": "사회문제/복지" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "소설 추천해줘",
+        "key_signals": ["CAT5_FORMAT (소설)", "CAT5_LEISURE (소설)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설/에세이"], "fine": ["소설"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "한국/일본/영미/장르소설 세분화 필요" } },
+          "reason": "'소설'만으로는 추천 방향이 완전히 달라짐"
+        },
+        "system_response": "어떤 소설이 좋으세요?\n[ 한국소설 ] [ 일본소설 ] [ 영미소설 ] [ 장르소설 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "사회적인 메시지가 담긴 걸로",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "subject": ["사회적 메시지"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "사회적 메시지라는 주제는 있지만 소설 장르(한국/일본/영미)가 아직 미결"
+        },
+        "system_response": "어느 나라 소설로 찾아드릴까요?\n[ 한국소설 ] [ 일본소설 ] [ 영미소설 ] [ 상관없음 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "한국 작가 거로",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "coarse": ["소설/에세이"], "fine": ["한국소설"], "subject": ["사회적 메시지"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "한국소설 + 사회적 메시지로 충분히 구체화됨"
+        },
+        "onboarding_note": "onboarding preferred_categories에도 한국소설·정치사회 있음. 세션이 채워졌으므로 onboarding topic 미사용",
+        "rag_query": {
+          "keyword_query": ["한국소설", "사회", "메시지", "여성"],
+          "semantic_query": "사회적 메시지가 담긴 한국소설",
+          "filters": { "cate_depth1": ["소설/에세이"] },
+          "score_boost": { "cate_depth2": ["한국소설"], "subject": ["사회적 메시지"] },
+          "session_signals": {},
+          "onboarding_signals": { "length_soft": "medium" }
+        },
+        "system_response": "사회적 메시지가 담긴 한국소설이에요.\n1. 『82년생 김지영』 조남주\n2. 『채식주의자』 한강\n3. 『아가미』 구병모"
+      },
+      {
+        "turn": 4,
+        "user_input": "2010년 이후에 나온 걸로만 바꿔줘",
+        "key_signals": [],
+        "slot_changes": {
+          "constraints": [{ "type": "pub_year", "operator": "gte", "value": 2010 }],
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 출판연도 제약 추가"
+        },
+        "system_response": "2010년 이후 출판된 사회적 메시지 한국소설이에요.\n1. 『82년생 김지영』 (2016) 조남주\n2. 『아가미』 (2011) 구병모\n3. 『어디선가 나를 찾는 전화벨이 울리고』 (2010) 김영하"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P002-A",
+    "name": "박성훈 (38세, 경기 수원시)",
+    "scenario_type": "구체적 실용 쿼리 → 즉시 RAG → 난이도 조정 → 대출",
+    "query_specificity": "구체적",
+    "turn_count": 3,
+    "onboarding": {
+      "preferred_length": "300p 이하",
+      "disliked_keywords": ["emotional", "sad", "mysterious"],
+      "frequent_libraries": ["수원시립중앙도서관", "경기도사이버도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경영전략" },
+        { "main": "경제/경영", "sub": "경영이론" },
+        { "main": "자기계발", "sub": "자기능력계발" },
+        { "main": "인문",     "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "창업 준비 중인데 실용적으로 도움될 책 추천해줘, 300페이지 이하로",
+        "key_signals": ["CAT2_PRACTICAL (써먹, 실용)", "CAT3_SHORT (300페이지 → constraint)"],
+        "slot_changes": {
+          "topic": { "coarse": ["경제/경영"], "fine": ["경영전략"], "subject": ["창업"], "source": "direct" },
+          "purpose": { "value": "실용", "source": "direct" },
+          "constraints": [{ "type": "page_range", "operator": "lte", "value": 300 }]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "창업(구체적 주제) + 실용 목적 + 분량 제약 — 1턴에 RAG 진행"
+        },
+        "onboarding_note": "topic 즉시 채워짐 → onboarding topic 미사용. disliked_keywords(emotional·sad·mysterious) 보조 신호",
+        "rag_query": {
+          "keyword_query": ["창업", "경영전략", "실용", "스타트업"],
+          "semantic_query": "창업 준비에 실용적으로 도움되는 경영 책, 300페이지 이하",
+          "filters": { "cate_depth1": ["경제/경영"] },
+          "constraints": { "page_range": [{ "operator": "lte", "value": 300 }] },
+          "score_boost": { "cate_depth2": ["경영전략"], "subject": ["창업"] },
+          "session_signals": { "purpose": "실용" },
+          "onboarding_signals": { "disliked_keywords": ["emotional","sad","mysterious"] }
+        },
+        "system_response": "창업 실전에 도움되는 책이에요.\n1. 『제로 투 원』 피터 틸 — 274p\n2. 『린 스타트업』 에릭 리스 — 296p\n3. 『창업가의 뇌』 이민화 — 288p"
+      },
+      {
+        "turn": 2,
+        "user_input": "너무 이론적인 건 빼줘, 바로 써먹을 수 있는 실무 내용으로",
+        "key_signals": ["CAT2_PRACTICAL (써먹)"],
+        "slot_changes": {
+          "reading_level": { "value": "easy", "source": "inferred" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 실무 중심, 이론 최소화 방향 조정"
+        },
+        "system_response": "바로 써먹을 수 있는 실무형 창업 책이에요.\n1. 『고객의 일자리를 해결하라』 클레이튼 크리스텐슨 — 288p\n2. 『스프린트』 제이크 냅 — 276p\n3. 『린 스타트업』 에릭 리스 — 296p"
+      },
+      {
+        "turn": 3,
+        "user_input": "수원시립중앙도서관에서 지금 빌릴 수 있어?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (수원시립중앙도서관)"],
+        "slot_changes": {
+          "location": { "library": "수원시립중앙도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터 추가"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 활성화",
+        "system_response": "수원시립중앙도서관 대출 가능한 것만이에요.\n1. 『스프린트』 — 대출 가능\n2. 『제로 투 원』 — 대출 중 (예약 가능)\n3. 『고객의 일자리를 해결하라』 — 대출 가능"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P002-B",
+    "name": "최준혁 (42세, 경기 성남시)",
+    "scenario_type": "경영 넓은 장르 → 마케팅 좁히기 → 실용 목적 → 분량 조정 → 대출",
+    "query_specificity": "중간",
+    "turn_count": 5,
+    "onboarding": {
+      "preferred_length": "350p 이하",
+      "disliked_keywords": ["funny", "lighthearted", "relaxing"],
+      "frequent_libraries": ["성남시립중앙도서관", "경기도사이버도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경영관리" },
+        { "main": "경제/경영", "sub": "마케팅/광고/고객" },
+        { "main": "자기계발", "sub": "비즈니스능력계발" },
+        { "main": "인문",     "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "경영 책 추천해줘",
+        "key_signals": ["CAT5_TOPIC (경영)"],
+        "slot_changes": {
+          "topic": { "coarse": ["경제/경영"], "fine": ["경제/경영"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "경영관리/마케팅/재무/전략 등 세분화 필요" } },
+          "reason": "경영은 마케팅/전략/재무/HR이 완전히 달라 좁혀야 함"
+        },
+        "system_response": "어떤 경영 분야를 찾으세요?\n[ 마케팅/광고 ] [ 경영전략 ] [ 리더십/조직 ] [ 재무/회계 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "마케팅이나 고객 관리 쪽으로",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "coarse": ["경제/경영"], "fine": ["마케팅/광고/고객"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "마케팅/광고/고객은 충분히 좁혀짐 — RAG 진행"
+        },
+        "onboarding_note": "onboarding에 마케팅/광고/고객 선호 있음. 세션 topic과 일치 → onboarding 보조 신호 중복이지만 유지",
+        "rag_query": {
+          "keyword_query": ["마케팅", "고객관리", "전략"],
+          "semantic_query": "마케팅과 고객 관리를 다루는 경영 책",
+          "filters": { "cate_depth1": ["경제/경영"] },
+          "score_boost": { "cate_depth2": ["마케팅/광고/고객"] },
+          "session_signals": {},
+          "onboarding_signals": { "disliked_keywords": ["funny","lighthearted","relaxing"], "length_soft": "medium" }
+        },
+        "system_response": "마케팅·고객 관리 추천 책이에요.\n1. 『넛지』 리처드 탈러\n2. 『보랏빛 소가 온다』 세스 고딘\n3. 『고객이 말하지 않는 것들』 필 바든"
+      },
+      {
+        "turn": 3,
+        "user_input": "실무에 바로 적용할 수 있는 걸로 바꿔줘",
+        "key_signals": ["CAT2_PRACTICAL (적용)"],
+        "slot_changes": {
+          "purpose": { "value": "실용", "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 실용 목적 명시"
+        },
+        "system_response": "실무에 바로 쓸 수 있는 마케팅 책이에요.\n1. 『설득의 심리학』 로버트 치알디니\n2. 『마케팅 불변의 법칙』 알 리스\n3. 『당신의 고객을 반하게 하라』 켄 블랜차드"
+      },
+      {
+        "turn": 4,
+        "user_input": "350페이지 이하로 바꿔줘",
+        "key_signals": [],
+        "slot_changes": {
+          "constraints": [{ "type": "page_range", "operator": "lte", "value": 350 }],
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 분량 제약 추가"
+        },
+        "system_response": "350페이지 이하 실무 마케팅 책이에요.\n1. 『설득의 심리학』 — 336p\n2. 『마케팅 불변의 법칙』 — 288p\n3. 『포지셔닝』 알 리스, 잭 트라우트 — 312p"
+      },
+      {
+        "turn": 5,
+        "user_input": "성남시립중앙도서관에서 지금 빌릴 수 있어?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (성남시립중앙도서관)"],
+        "slot_changes": {
+          "location": { "library": "성남시립중앙도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터 추가"
+        },
+        "system_response": "성남시립중앙도서관 대출 가능한 것만이에요.\n1. 『설득의 심리학』 — 대출 가능\n2. 『마케팅 불변의 법칙』 — 대출 중 (예약)\n3. 『포지셔닝』 — 대출 가능"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P002-C",
+    "name": "윤재원 (35세, 서울 강남구)",
+    "scenario_type": "매우 구체적 재테크 → 즉시 RAG → 세부 주제 Refinement",
+    "query_specificity": "매우 구체적",
+    "turn_count": 2,
+    "onboarding": {
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["강남구립도서관", "서울시립중부도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경제일반" },
+        { "main": "경제/경영", "sub": "재테크/금융" },
+        { "main": "자기계발", "sub": "성공/처세" },
+        { "main": "역사/문화", "sub": "역사일반" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "최근 3년 내 나온 재테크 책 추천해줘, 300페이지 이하로",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "coarse": ["경제/경영"], "fine": ["재테크/금융"], "source": "direct" },
+          "constraints": [
+            { "type": "pub_year",   "operator": "gte", "value": 2023 },
+            { "type": "page_range", "operator": "lte", "value": 300 }
+          ]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "재테크(구체적 장르) + 출판연도 + 분량 제약 — 1턴에 RAG 진행"
+        },
+        "rag_query": {
+          "keyword_query": ["재테크", "금융", "투자"],
+          "semantic_query": "최근 3년 내 출판된 재테크·금융 입문서, 300페이지 이하",
+          "filters": { "cate_depth1": ["경제/경영"] },
+          "constraints": {
+            "pub_year":   [{ "operator": "gte", "value": 2023 }],
+            "page_range": [{ "operator": "lte", "value": 300 }]
+          },
+          "score_boost": { "cate_depth2": ["재테크/금융"] },
+          "session_signals": {},
+          "onboarding_signals": { "length_soft": "medium" }
+        },
+        "system_response": "최근 3년 내 나온 재테크 책이에요.\n1. 『돈의 심리학』 모건 하우절 — 288p\n2. 『부의 시나리오』 박종훈 — 276p\n3. 『ETF 투자의 정석』 이은원 — 296p"
+      },
+      {
+        "turn": 2,
+        "user_input": "주식보다 부동산이나 ETF 쪽으로 바꿔줘",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "subject": ["부동산", "ETF"], "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 세부 주제 좁히기"
+        },
+        "system_response": "부동산·ETF 중심 재테크 책이에요.\n1. 『ETF 투자의 정석』 이은원 — 296p\n2. 『대한민국 부동산 투자법』 김원철 — 284p\n3. 『월급쟁이 부자로 은퇴하라』 은퇴학교 — 272p"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P003-A",
+    "name": "이순자 (67세, 서울 은평구)",
+    "scenario_type": "완전 모호 → 목적 파악 → 에세이 선택 → 대출",
+    "query_specificity": "두리뭉실",
+    "turn_count": 4,
+    "onboarding": {
+      "preferred_length": "250p",
+      "disliked_keywords": ["dark", "tense", "challenging"],
+      "frequent_libraries": ["은평구립도서관", "서울시립은평도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "인물/자전적에세이" },
+        { "main": "건강",     "sub": "건강일반" },
+        { "main": "인문",     "sub": "인문교양총서" },
+        { "main": "소설",     "sub": "한국소설" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "요즘 읽을 책이 없나요, 추천해줘요",
+        "key_signals": [],
+        "slot_changes": {},
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "슬롯 전혀 없음. 장르·목적·분위기 아무것도 없음"
+        },
+        "onboarding_note": "슬롯 전혀 없음 → onboarding preferred_categories 전부 보조 신호 활성: ['시/에세이','건강','인문','소설']",
+        "system_response": "어떤 종류의 책을 좋아하세요?\n[ 소설 ] [ 에세이 ] [ 건강·생활 ] [ 인문·교양 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "그냥 재미있는 거요, 편하게 읽히는 거",
+        "key_signals": ["CAT2_FUN (재미)", "CAT4_EASY (편하게)"],
+        "slot_changes": {
+          "purpose": { "value": "재미", "source": "direct" },
+          "reading_level": { "value": "easy", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "purpose·reading_level은 채워졌지만 장르가 없어 여전히 검색 범위 과도하게 넓음"
+        },
+        "system_response": "어떤 장르가 좋으세요?\n[ 소설 ] [ 에세이 ] [ 건강·생활 ] [ 인문·교양 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "에세이 같은 거 좋아해요",
+        "key_signals": ["CAT5_FORMAT (에세이)", "CAT5_LEISURE (에세이) → purpose.uncertainty=LOW"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": ["에세이"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "에세이(충분히 좁음) + 재미 목적 + easy reading_level — RAG 진행"
+        },
+        "onboarding_note": "topic 채워짐 → onboarding topic 미사용. disliked_keywords(dark·tense·challenging) 유지. preferred_length → length_soft=easy",
+        "rag_query": {
+          "keyword_query": ["에세이", "따뜻한", "일상", "가볍게"],
+          "semantic_query": "편하게 재미있게 읽을 수 있는 에세이",
+          "filters": { "cate_depth1": ["시/에세이"] },
+          "score_boost": { "cate_depth2": ["에세이"] },
+          "session_signals": { "purpose": "재미", "reading_level": "easy" },
+          "onboarding_signals": { "disliked_keywords": ["dark","tense","challenging"], "length_soft": "easy" }
+        },
+        "system_response": "편하게 읽히는 에세이예요.\n1. 『나는 나로 살기로 했다』 김수현\n2. 『아무튼, 계속』 김연수\n3. 『괜찮지 않아도 괜찮아』 최대호"
+      },
+      {
+        "turn": 4,
+        "user_input": "은평구립도서관에서 빌릴 수 있는 거요?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (은평구립도서관)"],
+        "slot_changes": {
+          "location": { "library": "은평구립도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 활성화",
+        "system_response": "은평구립도서관에서 빌릴 수 있는 것만이에요.\n1. 『나는 나로 살기로 했다』 — 대출 가능\n2. 『괜찮지 않아도 괜찮아』 — 대출 가능\n3. 『아무튼, 계속』 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P003-B",
+    "name": "정명희 (63세, 서울 노원구)",
+    "scenario_type": "역사 → 한국사 → 가벼운 읽기 → 즉시 RAG",
+    "query_specificity": "중간",
+    "turn_count": 3,
+    "onboarding": {
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["노원구립도서관", "불암정보도서관"],
+      "preferred_categories": [
+        { "main": "인문",      "sub": "인문교양총서" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "건강",      "sub": "건강일반" },
+        { "main": "역사/문화", "sub": "한국사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "역사 책 읽고 싶은데 추천해줘요",
+        "key_signals": ["CAT5_TOPIC (역사)"],
+        "slot_changes": {
+          "topic": { "coarse": ["역사/문화"], "fine": ["역사일반"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "역사는 한국사/세계사/시대별로 추천이 크게 달라짐" } },
+          "reason": "역사는 범위가 너무 넓음 — 한국사/세계사/특정 시대 확인 필요"
+        },
+        "system_response": "어떤 역사에 관심 있으세요?\n[ 한국사 ] [ 세계사 ] [ 근현대사 ] [ 특정 시대·지역 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "한국 역사요, 우리나라 이야기",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "coarse": ["역사/문화"], "fine": ["한국사"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["purpose_detail"],
+          "reason": "한국사로 좁혀짐. purpose가 없어 교양용인지 학습용인지 확인 필요"
+        },
+        "system_response": "어떤 목적으로 읽으실 건가요?\n[ 교양으로 가볍게 ] [ 제대로 공부하려고 ] [ 특정 시대가 궁금해서 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "너무 어렵지 않게 교양으로 읽고 싶어요",
+        "key_signals": ["CAT4_EASY (어렵지 않게)"],
+        "slot_changes": {
+          "purpose": { "value": "교양", "source": "direct" },
+          "reading_level": { "value": "easy", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "한국사 + 교양 목적 + easy — RAG 진행"
+        },
+        "rag_query": {
+          "keyword_query": ["한국사", "교양", "쉽게 읽히는"],
+          "semantic_query": "어렵지 않게 교양으로 읽을 수 있는 한국사 책",
+          "filters": { "cate_depth1": ["역사/문화"] },
+          "score_boost": { "cate_depth2": ["한국사"] },
+          "session_signals": { "purpose": "교양", "reading_level": "easy" },
+          "onboarding_signals": { "length_soft": "medium" }
+        },
+        "system_response": "교양으로 읽기 좋은 한국사 책이에요.\n1. 『한국사 편지』 박은봉\n2. 『역사의 역사』 유시민\n3. 『어떻게 살 것인가』 유시민"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P003-C",
+    "name": "한복순 (71세, 경기 고양시)",
+    "scenario_type": "건강책 구체적 → 즉시 RAG → 대출",
+    "query_specificity": "구체적",
+    "turn_count": 2,
+    "onboarding": {
+      "preferred_length": "200p 이하",
+      "disliked_keywords": ["dark", "adventurous", "mysterious", "tense"],
+      "frequent_libraries": ["고양시립중앙도서관", "고양시립화정도서관"],
+      "preferred_categories": [
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "건강", "sub": "자연건강" },
+        { "main": "시/에세이", "sub": "인물/자전적에세이" },
+        { "main": "종교", "sub": "불교" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "건강에 좋은 책 추천해줘요, 200페이지 이하로 읽기 쉬운 거",
+        "key_signals": ["CAT4_EASY (읽기 쉬운)"],
+        "slot_changes": {
+          "topic": { "coarse": ["건강"], "fine": ["건강일반"], "source": "direct" },
+          "reading_level": { "value": "easy", "source": "direct" },
+          "constraints": [{ "type": "page_range", "operator": "lte", "value": 200 }]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "건강(구체적 장르) + easy + 200p 이하 — 1턴에 RAG 진행"
+        },
+        "onboarding_note": "onboarding에 건강일반·자연건강 선호 있음. 세션과 일치 → 보조 신호로 추가 활용. disliked_keywords 강하게 적용",
+        "rag_query": {
+          "keyword_query": ["건강", "생활습관", "쉽게 읽히는"],
+          "semantic_query": "200페이지 이하로 쉽게 읽을 수 있는 건강 생활 책",
+          "filters": { "cate_depth1": ["건강"] },
+          "constraints": { "page_range": [{ "operator": "lte", "value": 200 }] },
+          "score_boost": { "cate_depth2": ["건강일반"] },
+          "session_signals": { "reading_level": "easy" },
+          "onboarding_signals": { "disliked_keywords": ["dark","adventurous","mysterious","tense"], "length_soft": "easy" }
+        },
+        "system_response": "200페이지 이하 건강 책이에요.\n1. 『하루 한 끼 건강법』 후나세 슌스케 — 192p\n2. 『내 몸 사용 설명서』 마이클 로이즌 — 196p\n3. 『자연치유』 앤드루 와일 — 188p"
+      },
+      {
+        "turn": 2,
+        "user_input": "고양시립중앙도서관에서 지금 빌릴 수 있어요?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (고양시립중앙도서관)"],
+        "slot_changes": {
+          "location": { "library": "고양시립중앙도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 활성화",
+        "system_response": "고양시립중앙도서관에서 빌릴 수 있는 것만이에요.\n1. 『하루 한 끼 건강법』 — 대출 가능\n2. 『내 몸 사용 설명서』 — 대출 가능\n3. 『자연치유』 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P004-A",
+    "name": "최민준 (16세, 서울 노원구)",
+    "scenario_type": "과학 넓은 장르 → 수학 좁히기 → 난이도 조정 → 심화 전환 → 대출",
+    "query_specificity": "중간",
+    "turn_count": 5,
+    "onboarding": {
+      "preferred_length": "제한 없음",
+      "disliked_keywords": [],
+      "frequent_libraries": ["노원구립도서관", "불암정보도서관"],
+      "preferred_categories": [
+        { "main": "과학",      "sub": "교양과학" },
+        { "main": "과학",      "sub": "수학" },
+        { "main": "소설",      "sub": "장르소설" },
+        { "main": "역사/문화", "sub": "세계사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "과학 책 추천해줘",
+        "key_signals": ["CAT5_TOPIC (과학)"],
+        "slot_changes": {
+          "topic": { "coarse": ["과학"], "fine": ["교양과학"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "수학/물리/생물/화학/천문 등 세분화 필요" } },
+          "reason": "과학은 분야가 너무 다양 — 수학/물리/생물/화학 방향 확인 필요"
+        },
+        "system_response": "어떤 과학 분야가 궁금하세요?\n[ 수학 ] [ 물리학 ] [ 생명과학 ] [ 천문학 ] [ 교양 전반 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "수학이나 통계 관련으로",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "coarse": ["과학"], "fine": ["수학"], "subject": ["통계"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "수학/통계는 충분히 좁혀짐 — RAG 진행"
+        },
+        "onboarding_note": "onboarding에 수학 선호 있음. 세션과 일치. preferred_length 제한없음 → length_soft 없음",
+        "rag_query": {
+          "keyword_query": ["수학", "통계", "교양"],
+          "semantic_query": "수학과 통계를 다루는 과학 책",
+          "filters": { "cate_depth1": ["과학"] },
+          "score_boost": { "cate_depth2": ["수학"], "subject": ["통계"] },
+          "session_signals": {},
+          "onboarding_signals": {}
+        },
+        "system_response": "수학·통계 추천 책이에요.\n1. 『수학의 쓸모』 닉 폴슨, 제임스 스콧\n2. 『통계의 함정』 레이너 자켈\n3. 『우리가 사랑한 수학』 조르주 이프라"
+      },
+      {
+        "turn": 3,
+        "user_input": "교과서 같은 건 싫고 교양으로 재미있게 읽히는 거로",
+        "key_signals": ["CAT2_FUN (재미)", "CAT4_EASY (재미있게 읽히는)"],
+        "slot_changes": {
+          "purpose": { "value": "교양", "source": "direct" },
+          "reading_level": { "value": "easy", "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 교양 목적·easy 추가"
+        },
+        "system_response": "교양으로 재미있게 읽히는 수학 책이에요.\n1. 『수학의 쓸모』 닉 폴슨 — 258p\n2. 『페르마의 마지막 정리』 사이먼 싱 — 336p\n3. 『0의 이야기』 찰스 세이프 — 272p"
+      },
+      {
+        "turn": 4,
+        "user_input": "더 깊이 있는 내용으로 바꿔줘",
+        "key_signals": ["CAT4_HARD (깊이)"],
+        "slot_changes": {
+          "reading_level": { "value": "hard", "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — reading_level easy→hard 변경"
+        },
+        "system_response": "깊이 있는 수학·통계 책이에요.\n1. 『확률론』 에릭 카우프만\n2. 『수학의 언어』 키스 데블린\n3. 『알고리즘의 아름다움』 크리스티안 푸트만"
+      },
+      {
+        "turn": 5,
+        "user_input": "노원구립도서관에 있어?",
+        "key_signals": ["CAT6_AVAIL", "CAT7_LOCATION (노원구립도서관)"],
+        "slot_changes": {
+          "location": { "library": "노원구립도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터"
+        },
+        "system_response": "노원구립도서관 대출 가능한 것만이에요.\n1. 『수학의 언어』 — 대출 가능\n2. 『페르마의 마지막 정리』 — 대출 가능\n3. 『확률론』 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P004-B",
+    "name": "장서윤 (15세, 서울 강동구)",
+    "scenario_type": "anchor 기반 → comparison_basis 파악 → Refinement(회피)",
+    "query_specificity": "중간",
+    "turn_count": 3,
+    "onboarding": {
+      "preferred_length": "350p 이하",
+      "disliked_keywords": ["dark", "sad", "tense"],
+      "frequent_libraries": ["강동구립도서관", "강일도서관"],
+      "preferred_categories": [
+        { "main": "소설",   "sub": "장르소설" },
+        { "main": "청소년", "sub": "청소년 소설" },
+        { "main": "과학",   "sub": "교양과학" },
+        { "main": "역사/문화", "sub": "세계사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "달러구트 꿈 백화점 같은 책 더 없어?",
+        "key_signals": ["CAT8_REFERENCE (같은)"],
+        "slot_changes": {
+          "anchor": { "value": "달러구트 꿈 백화점", "type": "book_title" },
+          "comparison_basis": null
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["comparison_basis"],
+          "reason": "anchor는 있지만 어떤 점이 비슷한지 기준이 없어 검색 불가"
+        },
+        "system_response": "달러구트 꿈 백화점의 어떤 점이 좋으셨어요?\n[ 따뜻한 분위기 ] [ 판타지 요소 ] [ 가볍게 읽히는 점 ] [ 주제 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "분위기 비슷한 걸로, 판타지 요소 있는 게 좋아",
+        "key_signals": [],
+        "slot_changes": {
+          "comparison_basis": { "dimensions": ["mood", "topic"], "raw": "판타지 요소 있는 따뜻한 분위기", "source": "direct" },
+          "topic": { "subject": ["판타지"], "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(mood·topic) 모두 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "onboarding 장르소설·청소년소설 선호 반영. disliked_keywords(dark·sad·tense) 강하게 적용",
+        "rag_query": {
+          "keyword_query": ["판타지", "따뜻한", "청소년소설", "꿈"],
+          "semantic_query": "달러구트 꿈 백화점처럼 따뜻하고 판타지 요소가 있는 소설",
+          "filters": { "cate_depth1": ["소설/에세이"], "title": "달러구트 꿈 백화점" },
+          "anchor": { "value": "달러구트 꿈 백화점", "type": "book_title" },
+          "session_signals": { "comparison_basis": { "dimensions": ["mood","topic"], "raw": "판타지 요소 있는 따뜻한 분위기" } },
+          "onboarding_signals": { "disliked_keywords": ["dark","sad","tense"], "length_soft": "medium" }
+        },
+        "system_response": "달러구트처럼 따뜻하고 판타지 요소 있는 소설이에요.\n1. 『어서 오세요, 휴남동 서점입니다』 황보름\n2. 『디저트가 있는 밤』 이슬아\n3. 『마법의 세탁소』 히가시노 게이고"
+      },
+      {
+        "turn": 3,
+        "user_input": "무섭거나 너무 어두운 건 빼줘",
+        "key_signals": ["CAT9_AVOID (빼줘)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["너무 무서운", "너무 어두운"], "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 분위기 회피 조건 추가"
+        },
+        "system_response": "밝고 따뜻한 판타지 소설만 골랐어요.\n1. 『어서 오세요, 휴남동 서점입니다』 황보름\n2. 『보건교사 안은영』 정세랑\n3. 『82년생 김지영』 조남주"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P004-C",
+    "name": "임도현 (17세, 경기 용인시)",
+    "scenario_type": "anchor + 주제 즉시 완성 → 대출",
+    "query_specificity": "매우 구체적",
+    "turn_count": 2,
+    "onboarding": {
+      "preferred_length": "400p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["용인시립중앙도서관", "용인시립기흥도서관"],
+      "preferred_categories": [
+        { "main": "과학", "sub": "천문학" },
+        { "main": "과학", "sub": "물리학" },
+        { "main": "과학", "sub": "교양과학" },
+        { "main": "소설", "sub": "영미소설" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "코스모스처럼 우주·천문학 관련된 책 추천해줘, 번역서로",
+        "key_signals": ["CAT8_REFERENCE (처럼)"],
+        "slot_changes": {
+          "anchor": { "value": "코스모스", "type": "book_title" },
+          "comparison_basis": { "dimensions": ["topic"], "raw": "우주·천문학 관련", "source": "direct" },
+          "topic": { "coarse": ["과학"], "fine": ["천문학"], "subject": ["우주"], "source": "direct" },
+          "constraints": [{ "type": "custom", "raw": "번역서", "value": "번역서" }]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(topic) + 천문학·우주 주제 + 번역서 제약 — 1턴에 RAG 진행"
+        },
+        "onboarding_note": "onboarding에 천문학 선호 있음. 세션과 완전 일치. preferred_length 400p 이하 → length_soft 없음",
+        "rag_query": {
+          "keyword_query": ["천문학", "우주", "코스모스", "번역"],
+          "semantic_query": "코스모스처럼 우주와 천문학을 다루는 번역 교양과학서",
+          "filters": { "cate_depth1": ["과학"], "title": "코스모스" },
+          "constraints": { "custom_constraints": ["번역서"] },
+          "score_boost": { "cate_depth2": ["천문학"], "subject": ["우주"] },
+          "anchor": { "value": "코스모스", "type": "book_title" },
+          "session_signals": { "comparison_basis": { "dimensions": ["topic"], "raw": "우주·천문학 관련" } },
+          "onboarding_signals": {}
+        },
+        "system_response": "코스모스처럼 우주·천문학 번역서예요.\n1. 『스티븐 호킹의 우주』 스티븐 호킹\n2. 『인터스텔라의 과학』 킵 손\n3. 『우주의 끝을 찾아서』 브라이언 그린"
+      },
+      {
+        "turn": 2,
+        "user_input": "용인시립중앙도서관에서 빌릴 수 있어?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (용인시립중앙도서관)"],
+        "slot_changes": {
+          "location": { "library": "용인시립중앙도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터"
+        },
+        "system_response": "용인시립중앙도서관 대출 가능한 것만이에요.\n1. 『스티븐 호킹의 우주』 — 대출 가능\n2. 『인터스텔라의 과학』 — 대출 가능\n3. 『우주의 끝을 찾아서』 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P005-A",
+    "name": "정다은 (29세, 서울 송파구)",
+    "scenario_type": "완전 모호 → 읽기 부담 확인 → 에세이 선택 → 분위기 회피 Refinement",
+    "query_specificity": "두리뭉실 (가장 모호한 케이스)",
+    "turn_count": 4,
+    "onboarding": {
+      "preferred_length": "200p 이하",
+      "disliked_keywords": ["challenging", "dark", "tense", "sad"],
+      "frequent_libraries": ["송파구립도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "건강",     "sub": "건강일반" },
+        { "main": "자기계발", "sub": "인간관계" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "책 추천해줘",
+        "key_signals": [],
+        "slot_changes": {},
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "슬롯 전혀 없음. 장르·목적·분위기 아무런 단서 없음"
+        },
+        "onboarding_note": "슬롯 전무 → onboarding 전부 활성: topic ['시/에세이','건강','자기계발'], disliked_keywords 전체, length_soft=easy",
+        "system_response": "어떤 책을 원하세요?\n[ 소설 ] [ 에세이 ] [ 자기계발 ] [ 건강·생활 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "그냥 가볍게 읽을 수 있는 거",
+        "key_signals": ["CAT4_EASY (가볍게)", "CAT3_SHORT (가볍게 → length 암시)"],
+        "slot_changes": {
+          "reading_level": { "value": "easy", "source": "direct" },
+          "length": { "level": "short", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "reading_level은 채워졌지만 여전히 장르 없음"
+        },
+        "system_response": "어떤 종류의 책이 좋으세요?\n[ 소설 ] [ 에세이 ] [ 자기계발 ] [ 건강·생활 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "에세이 있어?",
+        "key_signals": ["CAT5_FORMAT (에세이)", "CAT5_LEISURE (에세이) → purpose.uncertainty=LOW"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": ["에세이"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "에세이(충분히 좁음) + easy reading_level + short length_hint — RAG 진행"
+        },
+        "onboarding_note": "topic 채워짐 → onboarding topic 제외. disliked_keywords(challenging·dark·tense·sad) 매우 강하게 적용",
+        "rag_query": {
+          "keyword_query": ["에세이", "가볍게", "짧은", "따뜻한"],
+          "semantic_query": "가볍고 짧게 읽을 수 있는 에세이",
+          "filters": { "cate_depth1": ["시/에세이"] },
+          "score_boost": { "cate_depth2": ["에세이"] },
+          "session_signals": { "reading_level": "easy", "length": "short" },
+          "onboarding_signals": { "disliked_keywords": ["challenging","dark","tense","sad"], "length_soft": "easy" }
+        },
+        "system_response": "가볍게 읽을 수 있는 에세이예요.\n1. 『나는 나로 살기로 했다』 김수현\n2. 『오늘도 무사히』 최대호\n3. 『아무튼, 계속』 김연수"
+      },
+      {
+        "turn": 4,
+        "user_input": "너무 진지하거나 슬픈 건 빼줘",
+        "key_signals": ["CAT9_AVOID (빼줘)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["너무 진지한", "너무 슬픈"], "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 분위기 회피 조건 추가"
+        },
+        "system_response": "밝고 가벼운 에세이만 골랐어요.\n1. 『나는 나로 살기로 했다』 — 유쾌하고 따뜻한 톤\n2. 『오늘도 무사히』 — 일상 소소한 이야기\n3. 『가끔은 격하게 외로워야 한다』 — 공감형 에세이"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P005-B",
+    "name": "강태민 (33세, 서울 관악구)",
+    "scenario_type": "한국소설 즉시 RAG → 최신 출판 Refinement → 대출",
+    "query_specificity": "중간",
+    "turn_count": 3,
+    "onboarding": {
+      "preferred_length": "250p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["관악구립도서관", "서울대학교 중앙도서관"],
+      "preferred_categories": [
+        { "main": "소설",      "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "자기계발", "sub": "인간관계" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "한국 소설 추천해줘",
+        "key_signals": ["CAT5_FORMAT (소설)", "CAT5_LEISURE (소설)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설/에세이"], "fine": ["한국소설"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "한국소설은 충분히 좁혀짐 — 1턴에 RAG 진행"
+        },
+        "onboarding_note": "onboarding에 한국소설 선호 있음. 세션과 일치. preferred_length 250p → length_soft=easy",
+        "rag_query": {
+          "keyword_query": ["한국소설", "현대", "감동"],
+          "semantic_query": "읽기 좋은 한국소설",
+          "filters": { "cate_depth1": ["소설/에세이"] },
+          "score_boost": { "cate_depth2": ["한국소설"] },
+          "session_signals": {},
+          "onboarding_signals": { "length_soft": "easy" }
+        },
+        "system_response": "한국소설 추천이에요.\n1. 『아몬드』 손원평\n2. 『채식주의자』 한강\n3. 『불편한 편의점』 김호연"
+      },
+      {
+        "turn": 2,
+        "user_input": "최근에 화제된 거로 바꿔줘",
+        "key_signals": [],
+        "slot_changes": {
+          "constraints": [{ "type": "pub_year", "operator": "gte", "value": 2022 }],
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 최신 출판 필터"
+        },
+        "system_response": "최근 화제된 한국소설이에요.\n1. 『작별하지 않는다』 한강 (2021)\n2. 『저주토끼』 정보라 (2022)\n3. 『빛의 호위』 김연수 (2023)"
+      },
+      {
+        "turn": 3,
+        "user_input": "관악구립도서관에서 빌릴 수 있어?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (관악구립도서관)"],
+        "slot_changes": {
+          "location": { "library": "관악구립도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터"
+        },
+        "system_response": "관악구립도서관 대출 가능한 것만이에요.\n1. 『저주토끼』 — 대출 가능\n2. 『빛의 호위』 — 대출 가능\n3. 『작별하지 않는다』 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "user_id": "P005-C",
+    "name": "백수진 (27세, 경기 부천시)",
+    "scenario_type": "anchor → comparison_basis 파악 → Refinement 체인 → 대출",
+    "query_specificity": "중간",
+    "turn_count": 5,
+    "onboarding": {
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["부천시립복사골도서관", "부천시립상동도서관"],
+      "preferred_categories": [
+        { "main": "소설",      "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "자기계발", "sub": "자기능력계발" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "불편한 편의점 같은 책 더 있어?",
+        "key_signals": ["CAT8_REFERENCE (같은)"],
+        "slot_changes": {
+          "anchor": { "value": "불편한 편의점", "type": "book_title" },
+          "comparison_basis": null
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["comparison_basis"],
+          "reason": "anchor는 있지만 어떤 점에서 비슷한 책을 원하는지 기준 없음"
+        },
+        "system_response": "불편한 편의점의 어떤 점이 좋으셨어요?\n[ 따뜻한 분위기 ] [ 일상적인 이야기 ] [ 읽기 편한 문체 ] [ 등장인물 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "따뜻하고 일상적인 느낌으로",
+        "key_signals": [],
+        "slot_changes": {
+          "comparison_basis": { "dimensions": ["mood"], "raw": "따뜻하고 일상적인 느낌", "source": "direct" },
+          "topic": { "coarse": ["소설/에세이"], "fine": ["한국소설"], "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(mood) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "onboarding 한국소설 선호 있음. inferred topic과 일치. length_soft=medium",
+        "rag_query": {
+          "keyword_query": ["한국소설", "따뜻한", "일상", "힐링"],
+          "semantic_query": "불편한 편의점처럼 따뜻하고 일상적인 느낌의 한국소설",
+          "filters": { "cate_depth1": ["소설/에세이"], "title": "불편한 편의점" },
+          "score_boost": { "cate_depth2": ["한국소설"] },
+          "anchor": { "value": "불편한 편의점", "type": "book_title" },
+          "session_signals": { "comparison_basis": { "dimensions": ["mood"], "raw": "따뜻하고 일상적인 느낌" } },
+          "onboarding_signals": { "length_soft": "medium" }
+        },
+        "system_response": "불편한 편의점처럼 따뜻한 소설이에요.\n1. 『어서 오세요, 휴남동 서점입니다』 황보름\n2. 『나의 아름다운 이웃』 하태완\n3. 『오늘도 무사히』 구병모"
+      },
+      {
+        "turn": 3,
+        "user_input": "300페이지 이하로 바꿔줘",
+        "key_signals": [],
+        "slot_changes": {
+          "constraints": [{ "type": "page_range", "operator": "lte", "value": 300 }],
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 분량 제약 추가"
+        },
+        "system_response": "300페이지 이하 따뜻한 한국소설이에요.\n1. 『어서 오세요, 휴남동 서점입니다』 — 276p\n2. 『나의 아름다운 이웃』 — 264p\n3. 『오늘도 무사히』 — 288p"
+      },
+      {
+        "turn": 4,
+        "user_input": "한국 작가 거로만",
+        "key_signals": [],
+        "slot_changes": {
+          "topic": { "coarse": ["소설/에세이"], "fine": ["한국소설"], "source": "direct" },
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 한국 작가 명시 (이미 한국소설로 inferred였으나 direct 확정)"
+        },
+        "system_response": "한국 작가 기준 따뜻한 소설이에요.\n1. 『어서 오세요, 휴남동 서점입니다』 황보름\n2. 『나의 아름다운 이웃』 하태완\n3. 『해를 품은 달』 정은궐"
+      },
+      {
+        "turn": 5,
+        "user_input": "부천시립복사골도서관에서 지금 빌릴 수 있는 거?",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (부천시립복사골도서관)"],
+        "slot_changes": {
+          "location": { "library": "부천시립복사골도서관", "source": "direct" },
+          "availability_required": true,
+          "is_refinement": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "Refinement — 대출 가능 필터"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 활성화",
+        "system_response": "부천시립복사골도서관 대출 가능한 것만이에요.\n1. 『어서 오세요, 휴남동 서점입니다』 — 대출 가능\n2. 『나의 아름다운 이웃』 — 대출 가능\n3. 『해를 품은 달』 — 대출 중 (예약 가능)"
+      }
+    ]
+  }
+
+]

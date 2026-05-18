@@ -6,12 +6,13 @@
 #   v0.1 - 최초 작성 (단순 의도 분류)
 #   v0.2 - [FIX] LLMCallError 전파 방식 수정
 #   v0.3 - 전면 재작성: slot 기반 파이프라인으로 변경
-#          P1~P7 토론 결과 전부 반영
 #   v0.4 - inferred 확인 턴 추가
-#          inferred slot이 하나라도 있으면 확인 질문 후 RAG 진행
 #   v0.5 - 파이프라인 단계 분리 (pipeline.py)
-#          _build_rag_response → run_full_pipeline() 호출로 변경
-#          BM25/reranker 연동을 pipeline.py에서 관리
+#   v0.6 - mood: SlotValue → MoodSlot 타입 변경 대응
+#          comparison_basis: 확인 카드 표시, inferred 처리, reset 추가
+#   v0.7 - 온보딩 데이터 로드 추가
+#          _restore_or_create_context에서 user_metadata.json 로드
+#          SessionContext.onboarding에 저장
 # ============================================================
 """
 ChatService: slot 기반 파이프라인 오케스트레이션
@@ -29,19 +30,22 @@ ChatService: slot 기반 파이프라인 오케스트레이션
     컨텍스트 객체를 매 턴 프론트에서 받아서 업데이트 후 반환
     세션 저장소 없이 stateless 로 동작 (데모 버전)
 """
+import json
 import logging
-from typing import Any, Optional
+import os
+from typing import Optional
 
 from app.core.exceptions import LLMCallError
-from app.modules.slot.filler import extract_slots, get_slots_to_ask, is_ready_for_rag
+from app.core.session_logger import SessionLogger
+from app.modules.slot.filler import extract_slots, get_slots_to_ask
 from app.modules.slot.question_generator import (
     SessionQuestion,
     apply_choice,
+    generate_personalization_question,
     generate_question,
 )
 from app.modules.slot.schema import SessionContext, SlotSource
 from app.schemas.chat_schema import ChatRequest, SlotChatResponse
-from app.services.pipeline import run_full_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +72,21 @@ class ChatService:
         # 컨텍스트 복원 또는 신규 생성
         context = self._restore_or_create_context(request)
 
+        # 다음 질문에 버튼 표시 여부:
+        #   첫 질문이거나 버튼 클릭으로 답한 턴 → 버튼 O
+        #   자유 발화로 답한 턴 → 버튼 X (같은 버튼이 반복되는 것 방지)
+        show_choices_next = bool(request.selected_choice) or not context.asked_slots
+
+        # ── 세션 로거 초기화 ──────────────────────────────────
+        user_id    = (request.user_profile or {}).get("user_id")
+        session_id = getattr(context, "session_id", None) or str(context.turn_count)
+        sl = SessionLogger(
+            session_id    = session_id,
+            user_id       = user_id,
+            original_query= context.original_query,
+        )
+        slots_before = context.slots.model_copy(deep=True) if hasattr(context.slots, "model_copy") else context.slots
+
         # ── inferred 확인 턴 응답 처리 ────────────────────────
         if request.confirm_inferred is not None:
             return await self._handle_inferred_confirmation(
@@ -81,10 +100,30 @@ class ChatService:
                 choice     = request.selected_choice,
                 asked_slots= request.pending_slots,
             )
+            sl.update_turn(
+                user_choice = request.selected_choice,
+                slots_asked = request.pending_slots,
+            )
             logger.info("선택지 응답 반영: %s", request.selected_choice)
+
+            # 개인화 체크인 답변(mood 선택) → RAG 준비 완료로 표시
+            # fallback이 purpose/reading_level 재질문하는 것을 방지
+            if "mood" in request.pending_slots:
+                context.rag_ready_from_llm = True
 
         else:
             # ── 자유 발화 → slot 추출 ──────────────────────────
+            # signal 결과 접근을 위해 detect() 별도 호출
+            from app.modules.signal.detector import detect as signal_detect
+            signal_result = signal_detect(request.query)
+
+            sl.start_turn(
+                turn          = context.turn_count + 1,
+                query         = request.query,
+                signal_result = signal_result,
+                slots_before  = slots_before,
+            )
+
             try:
                 context = await extract_slots(
                     query   = request.query,
@@ -93,70 +132,135 @@ class ChatService:
                 )
             except LLMCallError as e:
                 logger.error("slot 추출 실패: %s", e)
+                sl.finalize(slots=context.slots, completed=False)
                 return self._error_response(context, str(e))
 
-        # ── inferred slot 있으면 확인 턴 ──────────────────────
-        inferred = _get_inferred_slots(context)
-        if inferred:
-            logger.info("inferred slot 발견 → 확인 턴: %s", inferred)
-            return self._build_confirmation_response(context, inferred)
+            sl.update_turn(slots_after=context.slots)
 
-        # ── RAG 준비 여부 판단 ────────────────────────────────
-        if is_ready_for_rag(context):
-            return await self._build_rag_response(context)
+        # ── 개인화 체크인 턴 (Rule-based — LLM 게이트 앞에서 실행) ─────
+        # 대분류 요청 + 관련 프로파일 있고 mood 없을 때 → LLM 판단 무관하게 먼저 물어봄
+        # (LLM이 rag_ready=false를 반환해도 fallback이 개인화 질문을 막는 것 방지)
+        if _needs_personalization_turn(context):
+            question = generate_personalization_question()
+            context.personalization_turn_done = True
+            context.asked_slots.append("mood")
+            sl.update_turn(slots_asked=["mood"])
+            sl._flush_turn()
+            return self._build_question_response(context, question, ["mood"], show_choices=True)
 
-        # ── session question 생성 ─────────────────────────────
+        # ── Profile 기반 RAG override (Rule-based) ────────────────────
+        # Clarification LLM은 슬롯만 판단하므로, 슬롯이 없어도 프로파일로
+        # 방향이 명확한 경우 rule로 override.
+        # 조건: topic/mood/anchor 모두 null + recent_liked_books 2권 이상
+        if _profile_covers_request(context):
+            context.rag_ready_from_llm = True
+            logger.info("profile 기반 RAG override: recent_liked_books 패턴으로 방향 결정")
+
+        # ── 메인 게이트: LLM 충분도 판단 ─────────────────────────
+        # slots_to_ask 있음              → 질문 emit 후 중단
+        # slots_to_ask=[] + rag_ready=false → 질문 소진, RAG 강행
+        # slots_to_ask=[] + rag_ready=true  → 후처리 → RAG
         slots_to_ask = get_slots_to_ask(context)
 
-        if not slots_to_ask:
-            return await self._build_rag_response(context)
+        if slots_to_ask:
+            question = await generate_question(
+                slots_to_ask = slots_to_ask,
+                context      = context,
+            )
+            context.asked_slots.extend(slots_to_ask)
+            sl.update_turn(slots_asked=slots_to_ask)
+            sl._flush_turn()
+            return self._build_question_response(context, question, slots_to_ask, show_choices=show_choices_next)
 
-        question = await generate_question(
-            slots_to_ask = slots_to_ask,
-            context      = context,
-        )
+        if not context.rag_ready_from_llm:
+            # slots_to_ask=[] 이고 rag_ready=false → 질문 소진, RAG 강행
+            logger.info("질문 소진 (rag_ready=false, slots_to_ask=[]) — RAG 강행")
+            return await self._build_rag_response(context, sl)
 
-        return self._build_question_response(context, question, slots_to_ask)
+        # ── rag_ready=true AND slots_to_ask=[] 이후 처리 ──────
+        # inferred 확인 턴 (LOW uncertainty만 — HIGH는 LLM이 rag_ready 판단 시 반영했어야 함)
+        inferred = _get_inferred_slots(context)
+        if inferred:
+            inferred = [
+                (s, v) for s, v in inferred
+                if context.slot_uncertainty.get(s, "high") != "high"
+            ]
+            if inferred:
+                logger.info("inferred slot 확인 턴: %s", inferred)
+                sl.update_turn(slots_asked=["inferred_confirmation"])
+                sl._flush_turn()
+                return self._build_confirmation_response(context, inferred)
+
+        # RAG
+        return await self._build_rag_response(context, sl)
 
     def _restore_or_create_context(self, request: ChatRequest) -> SessionContext:
         """
-        프론트에서 넘어온 컨텍스트를 복원하거나 새로 생성
+        프론트에서 넘어온 컨텍스트를 복원하거나 새로 생성.
+        온보딩 데이터(user_metadata.json)를 로드해서 context.onboarding에 저장.
 
-        데모 버전: stateless (컨텍스트를 프론트에서 관리)
-        실서비스: Redis 등 세션 저장소 사용 권장
+        데모 버전:
+            - 컨텍스트는 stateless (프론트에서 관리)
+            - 온보딩은 user_metadata.json에서 user_id로 조회
+            - request.user_profile에 {"user_id": "P001-A"} 형태로 전달
+        실서비스:
+            - Redis 등 세션 저장소 사용 권장
+            - 온보딩은 DB에서 user_id로 조회
         """
         if request.context:
             try:
-                return SessionContext(**request.context)
+                context = SessionContext(**request.context)
+                # 컨텍스트 복원 시에도 onboarding이 없으면 다시 로드
+                if context.onboarding is None:
+                    context.onboarding = _load_onboarding(request.user_profile)
+                return context
             except Exception as e:
                 logger.warning("컨텍스트 복원 실패, 신규 생성: %s", e)
 
-        return SessionContext(original_query=request.query)
+        context = SessionContext(original_query=request.query)
+        context.onboarding = _load_onboarding(request.user_profile)
+        return context
 
-    async def _build_rag_response(self, context: SessionContext) -> SlotChatResponse:
+    async def _build_rag_response(
+        self,
+        context: SessionContext,
+        sl     : Optional["SessionLogger"] = None,
+    ) -> SlotChatResponse:
         """
-        RAG 파이프라인 실행 및 응답 생성
+        RAG 쿼리 생성 후 카드로 반환 (데모 모드)
 
-        pipeline.py의 run_full_pipeline()을 호출해서
-        RAG 쿼리 생성 → BM25 검색 → Reranking 순으로 실행합니다.
-
-        새 단계 추가/변경은 pipeline.py에서 하면 됩니다.
+        데모: RAG 쿼리만 생성하고 BM25/Reranker는 실행하지 않음.
+             쿼리 내용을 카드로 보여주고 파이프라인 확인용으로 사용.
         """
-        pipeline_result = await run_full_pipeline(context)
+        from app.services.pipeline import run_rag_query
+        from app.core.session_logger import PipelineLog
 
-        # 컨텍스트에 rag_query 저장 (Refinement에서 재사용)
-        context.rag_query = pipeline_result.rag_query
+        rag_query = await run_rag_query(context)
+        context.rag_query = rag_query
 
         filled  = context.slots.get_filled_slots()
-        message = f"좋아요! {_describe_slots(context)} 관련 도서를 찾아볼게요 📚"
+        message = f"좋아요! {_describe_slots(context)} 관련 도서를 검색할게요."
+
+        # ── 세션 로그 기록 ────────────────────────────────────
+        if sl:
+            sl.log_recommendation(
+                rag_query    = rag_query or {},
+                pipeline_log = PipelineLog(bm25_count=0, reranker_count=0,
+                                           availability_count=0,
+                                           elapsed_ms={"rag_query": 0, "bm25": 0,
+                                                       "reranker": 0, "availability": 0,
+                                                       "total": 0}),
+                result       = None,
+            )
+            sl.finalize(slots=context.slots, completed=True, result=None)
 
         return SlotChatResponse(
             needs_clarification  = False,
             ready_for_rag        = True,
             message              = message,
-            rag_query            = pipeline_result.rag_query,
-            search_results       = pipeline_result.final_results,
-            availability_index   = pipeline_result.availability_index or None,
+            rag_query            = rag_query,
+            search_results       = None,
+            availability_index   = None,
             context              = context.model_dump(),
             filled_slots         = filled,
         )
@@ -166,6 +270,7 @@ class ChatService:
         context     : SessionContext,
         question    : Optional[SessionQuestion],
         slots_to_ask: list[str],
+        show_choices: bool = True,
     ) -> SlotChatResponse:
         """추가 질문 응답"""
         if not question:
@@ -176,7 +281,7 @@ class ChatService:
             ready_for_rag          = False,
             message                = question.question,
             clarification_question = question.question,
-            clarification_choices  = question.choices,
+            clarification_choices  = question.choices if show_choices else None,
             pending_slots          = slots_to_ask,
             context                = context.model_dump(),
             filled_slots           = context.slots.get_filled_slots(),
@@ -192,9 +297,19 @@ class ChatService:
         confirm_inferred=False → pending_slots 의 slot 질문으로 이동
         """
         if request.confirm_inferred:
-            # 승인 → inferred를 direct로 격상 후 RAG
             context = _promote_inferred_to_direct(context)
-            logger.info("inferred 승인 → direct 격상 후 RAG")
+            logger.info("inferred 확인 → direct 격상")
+
+            # 확인 후에도 남은 세션 질문 재확인
+            slots_to_ask = get_slots_to_ask(context)
+            if slots_to_ask:
+                question = await generate_question(
+                    slots_to_ask = slots_to_ask,
+                    context      = context,
+                )
+                context.asked_slots.extend(slots_to_ask)
+                return self._build_question_response(context, question, slots_to_ask, show_choices=True)
+
             return await self._build_rag_response(context)
 
         else:
@@ -248,7 +363,8 @@ class ChatService:
             raw_val = slots.reading_level.value.value if hasattr(slots.reading_level.value, 'value') else str(slots.reading_level.value)
             direct_items.append({"slot": "reading_level", "value": _LEVEL_KO.get(raw_val, raw_val), "label": "난이도", "type": "direct"})
         if slots.mood.is_filled() and slots.mood.source.value == "direct":
-            direct_items.append({"slot": "mood", "value": str(slots.mood.value), "label": "분위기", "type": "direct"})
+            mood_label = slots.mood.raw or ", ".join(c.value for c in slots.mood.categories)
+            direct_items.append({"slot": "mood", "value": mood_label, "label": "분위기", "type": "direct"})
 
         # constraints 요약
         constraint_items = []
@@ -272,15 +388,16 @@ class ChatService:
                 constraint_items.append({"slot": "custom", "value": str(c.raw or c.value), "label": "기타", "type": "constraint"})
 
         # anchor 요약
-        anchor_items = []
-        if context.anchor:
-            type_ko = {"book_title": "책", "author": "작가", "series": "시리즈", "library": "도서관"}
-            anchor_items.append({
-                "slot" : context.anchor.type.value,
-                "value": context.anchor.value,
-                "label": f"기준 {type_ko.get(context.anchor.type.value, '')}",
+        type_ko = {"book_title": "책", "author": "작가", "series": "시리즈", "library": "도서관"}
+        anchor_items = [
+            {
+                "slot" : a.type.value,
+                "value": a.value,
+                "label": f"기준 {type_ko.get(a.type.value, '')}",
                 "type" : "anchor",
-            })
+            }
+            for a in context.anchors
+        ]
 
         # 전체 요약 합산
         full_summary = inferred_items + direct_items + constraint_items + anchor_items
@@ -326,6 +443,7 @@ class ChatService:
         )
 
 
+
 def _describe_slots(context: SessionContext) -> str:
     """채워진 slot을 자연어로 요약"""
     parts = []
@@ -345,8 +463,8 @@ def _describe_slots(context: SessionContext) -> str:
         if label:
             parts.append(label)
 
-    if context.anchor:
-        parts.append(f"{context.anchor.value} 관련")
+    for a in context.anchors:
+        parts.append(f"{a.value} 관련")
 
     return " · ".join(parts) if parts else "요청하신 조건"
 
@@ -358,10 +476,11 @@ chat_service = ChatService()
 # ── 헬퍼 함수 ──────────────────────────────────────────────────
 
 _SLOT_LABELS = {
-    "topic"        : "주제",
-    "purpose"      : "목적",
-    "reading_level": "난이도",
-    "mood"         : "분위기",
+    "topic"            : "주제",
+    "purpose"          : "목적",
+    "reading_level"    : "난이도",
+    "mood"             : "분위기",
+    "comparison_basis" : "비교 기준",
 }
 
 _LEVEL_KO = {
@@ -371,20 +490,25 @@ _LEVEL_KO = {
 }
 
 
+
+
 def _get_inferred_slots(context: SessionContext) -> list[tuple[str, str]]:
     slots  = context.slots
     result = []
     if slots.purpose.source == SlotSource.inferred and slots.purpose.is_filled():
-        # [FIX] PurposeValue.교양 → 교양: Enum이면 .value로 꺼내기
         val = slots.purpose.value.value if hasattr(slots.purpose.value, 'value') else str(slots.purpose.value)
         result.append(("purpose", val))
     if slots.reading_level.source == SlotSource.inferred and slots.reading_level.is_filled():
-        # [FIX] ReadingLevelValue.easy → 가볍고 쉽게
         raw_val = slots.reading_level.value.value if hasattr(slots.reading_level.value, 'value') else str(slots.reading_level.value)
         label = _LEVEL_KO.get(raw_val, raw_val)
         result.append(("reading_level", label))
     if slots.mood.source == SlotSource.inferred and slots.mood.is_filled():
-        result.append(("mood", str(slots.mood.value)))
+        mood_label = slots.mood.raw or ", ".join(c.value for c in slots.mood.categories)
+        result.append(("mood", mood_label))
+    if slots.comparison_basis.source == SlotSource.inferred and slots.comparison_basis.is_filled():
+        dims_label = ", ".join(d.name for d in slots.comparison_basis.dimensions)
+        label = dims_label or slots.comparison_basis.raw or ""
+        result.append(("comparison_basis", label))
     return result
 
 
@@ -418,7 +542,12 @@ def _build_confirmation_message(
         raw_val = slots.reading_level.value.value if hasattr(slots.reading_level.value, 'value') else str(slots.reading_level.value)
         direct_lines.append(f"  • 난이도: {_LEVEL_KO.get(raw_val, raw_val)}")
     if slots.mood.is_filled() and slots.mood.source.value == "direct":
-        direct_lines.append(f"  • 분위기: {slots.mood.value}")
+        mood_label = slots.mood.raw or ", ".join(c.value for c in slots.mood.categories)
+        direct_lines.append(f"  • 분위기: {mood_label}")
+    if slots.comparison_basis.is_filled() and slots.comparison_basis.source.value == "direct":
+        dims_label = ", ".join(d.name for d in slots.comparison_basis.dimensions)
+        cb_label = dims_label or slots.comparison_basis.raw or ""
+        direct_lines.append(f"  • 비교 기준: {cb_label}")
     if direct_lines:
         lines.append("  [명시된 값]")
         lines.extend(direct_lines)
@@ -447,9 +576,10 @@ def _build_confirmation_message(
                 lines.append(f"  • 기타: {c.raw or c.value}")
 
     # anchor
-    if context.anchor:
+    if context.anchors:
         type_ko = {"book_title": "책", "author": "작가", "series": "시리즈", "library": "도서관"}
-        lines.append(f"  • 기준 {type_ko.get(context.anchor.type.value, '')}: {context.anchor.value}")
+        for a in context.anchors:
+            lines.append(f"  • 기준 {type_ko.get(a.type.value, '')}: {a.value}")
 
     lines.append("\n바꾸실 내용이 있으면 알려주세요!")
     return "\n".join(lines)
@@ -463,12 +593,14 @@ def _promote_inferred_to_direct(context: SessionContext) -> SessionContext:
         slots.reading_level.source = SlotSource.direct
     if slots.mood.source == SlotSource.inferred:
         slots.mood.source = SlotSource.direct
+    if slots.comparison_basis.source == SlotSource.inferred:
+        slots.comparison_basis.source = SlotSource.direct
     context.slots = slots
     return context
 
 
 def _reset_slots(context: SessionContext, slot_names: list[str]) -> SessionContext:
-    from app.modules.slot.schema import SlotValue, TopicSlot
+    from app.modules.slot.schema import MoodSlot, ComparisonBasisSlot, SlotValue, TopicSlot
     slots = context.slots
     for name in slot_names:
         if name == "purpose":
@@ -476,8 +608,150 @@ def _reset_slots(context: SessionContext, slot_names: list[str]) -> SessionConte
         elif name == "reading_level":
             slots.reading_level = SlotValue()
         elif name == "mood":
-            slots.mood = SlotValue()
+            slots.mood = MoodSlot()
+        elif name == "comparison_basis":
+            slots.comparison_basis = ComparisonBasisSlot()
         elif name == "topic":
             slots.topic = TopicSlot()
     context.slots = slots
     return context
+
+
+# ── 온보딩 로드 ───────────────────────────────────────────────
+
+# user_metadata.json 경로
+# 데모: 프로젝트 루트 기준 상대 경로
+# 실서비스: 환경변수 USER_METADATA_PATH 또는 DB 연결로 교체
+_USER_METADATA_PATH = os.path.join(
+    os.path.dirname(__file__),   # app/services/
+    "..", "..", "..",             # 프로젝트 루트
+    "user_metadata.json",
+)
+
+# 메모리 캐시 — 서버 기동 시 한 번만 로드
+_user_metadata_cache: dict[str, dict] = {}
+
+
+def _profile_covers_request(context: SessionContext) -> bool:
+    """
+    슬롯 없이도 프로파일만으로 RAG 방향이 충분한지 판단.
+
+    조건 (전부 만족해야 True):
+    - topic/mood/anchor 모두 null (슬롯 신호 없음)
+    - recent_liked_books 2권 이상 (구체적 독서 패턴 존재)
+    - Clarification LLM이 rag_ready=False로 판단한 상태 (override 필요한 경우만)
+    """
+    if context.rag_ready_from_llm:
+        return False
+    if context.slots.topic.is_filled():
+        return False
+    if context.slots.mood.is_filled():
+        return False
+    if context.anchors:
+        return False
+    recent = (context.onboarding or {}).get("recent_liked_books") or []
+    return len(recent) >= 2
+
+
+def _needs_personalization_turn(context: SessionContext) -> bool:
+    """
+    개인화 체크인 턴이 필요한지 판단 (Rule-based — LLM 무관).
+
+    조건 (전부 만족해야 True):
+    - 아직 체크인 안 함 (personalization_turn_done=False)
+    - 온보딩 프로파일 있음
+    - mood 미채움
+    - topic이 대분류 수준
+    - preferred_categories가 있으면, 현재 topic의 coarse 카테고리와 일치하는 항목 존재
+      (profile이 현재 요청과 무관하면 mood 물어봐도 개인화 효과 없음)
+    """
+    if context.personalization_turn_done:
+        return False
+    if not context.onboarding:
+        return False
+    if context.slots.mood.is_filled():
+        return False
+
+    from app.modules.slot.filler import STILL_BROAD_FINES
+    fine_set   = set(context.slots.topic.fine   or [])
+    coarse_set = set(context.slots.topic.coarse or [])
+
+    if not fine_set and not coarse_set:
+        return False
+
+    is_broad = (fine_set and fine_set.issubset(STILL_BROAD_FINES)) or (not fine_set and coarse_set)
+    if not is_broad:
+        return False
+
+    # preferred_categories가 있으면 현재 topic과 관련된 카테고리가 있어야 함
+    # (없으면 프로파일이 무관 → 개인화 질문이 의미 없음)
+    preferred = (context.onboarding or {}).get("preferred_categories") or []
+    if preferred:
+        topic_cats = coarse_set | fine_set
+        relevant = any(p.get("main") in topic_cats for p in preferred)
+        if not relevant:
+            return False
+
+    return True
+
+
+def _load_user_metadata() -> dict[str, dict]:
+    """user_metadata.json을 로드해서 user_id 기반 dict로 반환 (캐시)"""
+    global _user_metadata_cache
+    if _user_metadata_cache:
+        return _user_metadata_cache
+
+    path = os.path.abspath(_USER_METADATA_PATH)
+    if not os.path.exists(path):
+        logger.warning("user_metadata.json 없음: %s", path)
+        return {}
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            records = json.load(f)
+        _user_metadata_cache = {r["user_id"]: r for r in records}
+        logger.info("user_metadata 로드 완료: %d명", len(_user_metadata_cache))
+    except Exception as e:
+        logger.error("user_metadata 로드 실패: %s", e)
+
+    return _user_metadata_cache
+
+
+def _load_onboarding(user_profile: Optional[dict]) -> Optional[dict]:
+    """
+    user_profile에서 user_id를 읽어 온보딩 데이터를 반환.
+
+    데모 버전: user_metadata.json에서 조회
+    실서비스: DB 조회로 교체
+
+    Args:
+        user_profile: ChatRequest.user_profile
+                      {"user_id": "P001-A"} 형태
+                      없으면 None 반환 (온보딩 미사용)
+
+    Returns:
+        온보딩 데이터 dict 또는 None
+        {
+            "preferred_categories": [{"main": "소설", "sub": "한국소설"}, ...],
+            "preferred_length": "300p 이내",
+            "disliked_keywords": ["dark", "tense"],
+            "frequent_libraries": ["마포구립서강도서관"],
+            ...
+        }
+    """
+    if not user_profile:
+        return None
+
+    user_id = user_profile.get("user_id")
+    if not user_id:
+        return None
+
+    metadata = _load_user_metadata()
+    record   = metadata.get(user_id)
+
+    if not record:
+        logger.warning("user_id 없음: %s", user_id)
+        return None
+
+    logger.info("온보딩 로드: user_id=%s", user_id)
+    return record

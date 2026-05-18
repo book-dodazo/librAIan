@@ -132,8 +132,8 @@ if __name__ == "__main__":
     reconstructed_session = {
         "keyword_query": ["SF", "소설", "재미", "가벼운", "힐링"],
         "semantic_query": "지친 일상에서 가볍고 재미있게 읽을 수 있는 SF 소설",
-        "filters": {"coarse_category": "과학/기술"},
-        "score_boost": {"fine_category": "SF", "subject": "우주 탐험"},
+        "filters": {"cate_depth1": "과학/기술"},
+        "score_boost": {"cate_depth2": "SF", "subject": "우주 탐험"},
     }
 
     # 2. DB에서 샘플 ISBN 10개 조회
