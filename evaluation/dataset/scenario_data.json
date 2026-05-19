@@ -59,7 +59,7 @@
         "onboarding_note": "disliked_keywords(tense·dark·informative) 보조 신호 활성. page_range 세션 직접 지정 → length_soft 미사용",
         "rag_query": {
           "keyword_query": ["에세이", "실존주의", "철학", "자아성찰"],
-          "semantic_query": "지혜롭게 나이 든다는 것처럼 실존주의적 주제를 다루는 사유하게 만드는 에세이, 300p 이하 2020년 이후",
+          "semantic_query": "지혜롭게 나이 든다는 것처럼 실존주의적 주제를 다루는 사유하게 만드는 에세이",
           "filters": {
             "cate_depth1": ["시/에세이", "인문"],
             "custom_constraints": ["실존주의", "철학적 성찰"]
@@ -136,7 +136,7 @@
         "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
         "rag_query": {
           "keyword_query": ["리더십", "경영관리", "실무", "조직관리"],
-          "semantic_query": "장하준 스타일의 실무에 바로 적용할 수 있는 경영 리더십 책, 블레인 매코믹 제외",
+          "semantic_query": "장하준 스타일의 실무에 바로 적용할 수 있는 경영 리더십 책",
           "filters": { "cate_depth1": ["경제/경영"] },
           "constraints": { "author_non": ["블레인 매코믹"] },
           "score_boost": { "cate_depth2": ["경영관리"] },
@@ -213,8 +213,8 @@
         },
         "rag_query": {
           "keyword_query": ["우주", "교양과학"],
-          "semantic_query": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 교양과학 책, 2015년 이후 400p 이하",
-          "filters": { "cate_depth1": ["과학"] },
+          "semantic_query": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 교양과학 책",
+          "filters": { "cate_depth1": ["자연/과학"] },
           "constraints": {
             "pub_year": [{ "operator": "gte", "value": 2015 }],
             "page_range": [{ "operator": "lte", "value": 400 }]
@@ -366,7 +366,7 @@
         },
         "rag_query": {
           "keyword_query": ["노년", "삶", "인문 에세이", "한국 작가"],
-          "semantic_query": "노년기 삶을 주제로 한 가볍게 읽히는 한국 작가 인문 에세이, 250p 이하",
+          "semantic_query": "노년기 삶을 주제로 한 가볍게 읽히는 한국 작가 인문 에세이",
           "filters": {
             "cate_depth1": ["인문", "시/에세이"],
             "custom_constraints": ["에세이 형식", "쉬운 문체", "한국 작가"]
@@ -532,7 +532,7 @@
         },
         "rag_query": {
           "keyword_query": ["주식", "ETF", "투자 기초", "재테크"],
-          "semantic_query": "주식·ETF 기초부터 실전 위주로 쉽게 설명한 재테크 책, 학문적 스타일 제외 300p 이하 2020년 이후",
+          "semantic_query": "주식·ETF 기초부터 실전 위주로 쉽게 설명한 재테크 책",
           "filters": {
             "cate_depth1": ["경제/경영"],
             "custom_constraints": ["실전적인", "입문 친화적"]
@@ -612,7 +612,7 @@
         "onboarding_note": "preferred_length 제한없음 → page_length_soft 없음. onboarding 장르소설·한국사 선호 일치",
         "rag_query": {
           "keyword_query": ["역사소설", "한국사", "인물", "청소년"],
-          "semantic_query": "하룻밤에 읽는 광개토대왕처럼 역사 속 인물들의 삶을 다룬 세계사 배경 역사소설, 청소년 이상 400p 이하",
+          "semantic_query": "하룻밤에 읽는 광개토대왕처럼 역사 속 인물들의 삶을 다룬 세계사 배경 역사소설",
           "filters": {
             "cate_depth1": ["소설"],
             "target_reader": ["청소년 이상"]
@@ -691,7 +691,7 @@
         "onboarding_note": "page_range 세션 직접 지정 → length_soft 미사용",
         "rag_query": {
           "keyword_query": ["한국소설", "여성서사", "공감", "위로"],
-          "semantic_query": "공감되면서 힘이 되는 여성 서사 한국소설, 무겁지 않고 우울하지 않은, 300p 이하",
+          "semantic_query": "공감되면서 힘이 되는 여성 서사 한국소설, 무겁지 않고 우울하지 않은",
           "filters": { "cate_depth1": ["소설"] },
           "constraints": {
             "page_range": [{ "operator": "lte", "value": 300 }]
@@ -1324,7 +1324,7 @@
         "onboarding_note": "disliked_keywords(dark·sad·tense) 온보딩 신호와 avoid_mood 세션 신호 일치 → 더 강하게 적용",
         "rag_query": {
           "keyword_query": ["청소년 소설", "성장", "따뜻한", "감동"],
-          "semantic_query": "손원평 작가처럼 따뜻하고 감동적인 청소년 소설, 아몬드·달러구트 제외",
+          "semantic_query": "손원평 작가처럼 따뜻하고 감동적인 청소년 소설",
           "filters": {
             "cate_depth1": ["소설", "청소년"],
             "target_reader": ["청소년"]
@@ -1604,7 +1604,7 @@
         "rag_query": {
           "keyword_query": ["교양과학", "SF", "재미있게", "이야기 형식"],
           "semantic_query": "딱딱하지 않고 이야기처럼 읽히는 교양과학·SF 책",
-          "filters": { "cate_depth1": ["과학", "소설"] },
+          "filters": { "cate_depth1": ["자연/과학", "소설"] },
           "constraints": {},
           "score_boost": { "cate_depth2": ["교양과학", "장르소설"] },
           "session_signals": {

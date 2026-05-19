@@ -391,6 +391,7 @@ def full_bm25(
     index_name="books_review_full",
     size=20,
     small_category_embeddings=None,
+    embedding_field = "embedding"
     ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -999,7 +1000,8 @@ def full_dense(
     index_name="books_review_full",
     size=20,
     num_candidates=100,
-    small_category_embeddings=None
+    small_category_embeddings=None,
+    embedding_field="embedding"
 
 ):
     if small_category_embeddings is None:
@@ -1147,7 +1149,7 @@ def full_dense(
     query_body = {
         "size": size,
         "knn": {
-            "field": "embedding",
+            "field": embedding_field,
             "query_vector": query_vector,
             "k": size,
             "num_candidates": num_candidates,
@@ -1246,6 +1248,7 @@ def chunk_dense(
     candidate_size=100,
     top_k_per_book=3,
     small_category_embeddings=None,
+    embedding_field="embedding"
     
 ):  
     if small_category_embeddings is None:
@@ -1423,7 +1426,7 @@ def chunk_dense(
     query_body = {
         "size": candidate_size,
         "knn": {
-            "field": "embedding",
+            "field": embedding_field,
             "query_vector": query_vector,
             "k": candidate_size,
             "num_candidates": num_candidates,
@@ -1588,7 +1591,8 @@ def full_hybrid(
     rrf_k=60,
     bm25_weight=1.0,
     dense_weight=1.0,
-    small_category_embeddings=None
+    small_category_embeddings=None,
+    embedding_field="embedding"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -1610,7 +1614,8 @@ def full_hybrid(
         index_name="books_review_full",
         size=dense_candidate_size,
         num_candidates=num_candidates,
-        small_category_embeddings=small_category_embeddings
+        small_category_embeddings=small_category_embeddings,
+        embedding_field=embedding_field
     )
 
     merged = {}
@@ -1714,7 +1719,8 @@ def chunk_hybrid(
     require_both=False,
     overlap_bonus=0.0,
     rrf_k=60,
-    small_category_embeddings=None
+    small_category_embeddings=None,
+    embedding_field="embedding"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -1735,7 +1741,8 @@ def chunk_hybrid(
         candidate_size=dense_candidate_size,
         num_candidates=num_candidates,
         top_k_per_book=top_k_per_book,
-        small_category_embeddings=small_category_embeddings
+        small_category_embeddings=small_category_embeddings,
+        embedding_field=embedding_field
     )
 
     merged = {}
