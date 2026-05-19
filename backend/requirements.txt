@@ -21,3 +21,4 @@ requests
 numpy
 starlette
 elasticsearch==8.19.0
+kiwipiepy
