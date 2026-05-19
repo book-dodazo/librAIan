@@ -58,8 +58,8 @@
         },
         "onboarding_note": "disliked_keywords(tense·dark·informative) 보조 신호 활성. page_range 세션 직접 지정 → length_soft 미사용",
         "rag_query": {
-          "keyword_query": ["에세이", "실존주의", "철학", "자아성찰"],
-          "semantic_query": "지혜롭게 나이 든다는 것처럼 실존주의적 주제를 다루는 사유하게 만드는 에세이",
+          "keyword_query": ["나이듦", "실존주의", "철학적 에세이", "삶의 지혜", "인생 후반"],
+          "semantic_query": "실존주의적 주제를 중심으로 듦에 대한 철학적 사유를 유도하며 삶의 지혜를 탐구하는 에세이",
           "filters": {
             "cate_depth1": ["시/에세이", "인문"],
             "custom_constraints": ["실존주의", "철학적 성찰"]
@@ -69,7 +69,6 @@
             "pub_year": [{ "operator": "gte", "value": 2020 }]
           },
           "score_boost": { "cate_depth2": ["테마에세이", "철학"], "subject": ["실존주의", "자아성찰"] },
-          "anchor": { "value": "지혜롭게 나이 든다는 것", "type": "book_title" },
           "session_signals": { "comparison_basis": { "dimensions": ["topic"], "raw": "실존주의적인 느낌" } },
           "onboarding_signals": {"age": 23, "disliked_keywords": ["tense", "dark", "informative"] }
         },
@@ -135,12 +134,11 @@
         },
         "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
         "rag_query": {
-          "keyword_query": ["리더십", "경영관리", "실무", "조직관리"],
-          "semantic_query": "장하준 스타일의 실무에 바로 적용할 수 있는 경영 리더십 책",
+          "keyword_query": ["경영 리더십", "실무 적용", "경제 이론 비판", "현실적 대안", "실용적 경영 전략"],
+          "semantic_query": "경영 리더십 원칙을 실무에 바로 적용할 수 있는 경제 이론 비판 및 현실적 대안을 제시하는 책",
           "filters": { "cate_depth1": ["경제/경영"] },
           "constraints": { "author_non": ["블레인 매코믹"] },
           "score_boost": { "cate_depth2": ["경영관리"] },
-          "anchor": { "value": "장하준", "type": "author" },
           "session_signals": { "purpose": "실용" },
           "onboarding_signals": {
             "age": 42,
@@ -212,15 +210,14 @@
           "reason": "anchor(series) + COMPLEX constraints + avoid_mood 채워짐 — RAG 진행"
         },
         "rag_query": {
-          "keyword_query": ["우주", "교양과학"],
-          "semantic_query": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 교양과학 책",
+          "keyword_query": ["우주 관련 교양과학", "이야기 형식 서술", "대중 과학 책", "물리학 개념 쉽게 설명", "세상의 기원과 진화"],
+          "semantic_query": "우주와 물리학 개념을 이야기 형식으로 풀어낸 교양과학 책 추천",
           "filters": { "cate_depth1": ["자연/과학"] },
           "constraints": {
             "pub_year": [{ "operator": "gte", "value": 2015 }],
             "page_range": [{ "operator": "lte", "value": 400 }]
           },
           "score_boost": {},
-          "anchor": { "value": "엔드 오브 타임", "type": "book_title" },
           "session_signals": {
             "purpose": "교양",
             "reading_level": "medium",
@@ -621,7 +618,6 @@
             "page_range": [{ "operator": "lte", "value": 400 }]
           },
           "score_boost": { "cate_depth2": ["장르소설"] },
-          "anchor": { "value": "하룻밤에 읽는 광개토대왕", "type": "book_title" },
           "session_signals": {
             "comparison_basis": { "dimensions": ["topic", "mood"], "raw": "인물 중심 역사 서사" }
           },
@@ -1157,12 +1153,11 @@
         },
         "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
         "rag_query": {
-          "keyword_query": ["심리", "습관", "실용"],
-          "semantic_query": "생각에 관한 생각처럼 일상에서 바로 적용할 수 있는 심리·행동경제학 책, 무기력할 때 동기부여가 되는",
+          "keyword_query": ["심리학", "행동경제학", "일상 적용", "동기부여", "무기력 극복", "실용적 책"],
+          "semantic_query": "일상에서 바로 적용할 수 있는 심리학과 행동경제학 원리를 다루며, 무기력할 때 동기부여를 제공하는 실용적인 책",
           "filters": { "cate_depth1": ["인문"] },
           "constraints": {},
           "score_boost": { "cate_depth2": ["심리학"], "subject": ["습관"] },
-          "anchor": { "value": "생각에 관한 생각", "type": "book_title" },
           "session_signals": {
             "mood": ["negative_passive", "recovery_meaning"],
             "purpose": "실용",
@@ -1323,8 +1318,8 @@
         },
         "onboarding_note": "disliked_keywords(dark·sad·tense) 온보딩 신호와 avoid_mood 세션 신호 일치 → 더 강하게 적용",
         "rag_query": {
-          "keyword_query": ["청소년 소설", "성장", "따뜻한", "감동"],
-          "semantic_query": "손원평 작가처럼 따뜻하고 감동적인 청소년 소설",
+          "keyword_query": ["청소년 소설", "따뜻한 감동적인", "사회적 메시지", "성장 이야기", "인간관계"],
+          "semantic_query": "따뜻한 감동적인 분위기의 청소년 소설로 사회적 메시지와 성장을 다룬 작품",
           "filters": {
             "cate_depth1": ["소설", "청소년"],
             "target_reader": ["청소년"]
@@ -1334,7 +1329,6 @@
             "author_non": ["아몬드", "달러구트 꿈 백화점"]
           },
           "score_boost": { "cate_depth2": ["청소년 소설"] },
-          "anchor": { "value": "손원평", "type": "author" },
           "availability_required": true,
           "session_signals": {
             "purpose": "재미",
