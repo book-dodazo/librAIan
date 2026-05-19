@@ -212,25 +212,9 @@ def _summarize_slots(context: SessionContext) -> str:
         if loc_parts:
             lines.append(f"대출 지역/도서관 - {', '.join(loc_parts)}")
 
-    _OP_KO = {"lte": "이하", "lt": "미만", "gte": "이상", "gt": "초과", "eq": ""}
-    for c in slots.constraints:
-        if c.type == "author":
-            lines.append(f"포함할 작가 - {c.value}")
-        elif c.type == "nonauthor":
-            lines.append(f"제외할 작가 - {c.value}")
-        elif c.type == "page_range" and c.value and c.operator:
-            op = _OP_KO.get(c.operator.value, c.operator.value)
-            lines.append(f"페이지 수 - {c.value}페이지 {op}")
         elif c.type == "pub_year" and c.value and c.operator:
             op = {"gte": "이후", "lte": "이전", "gt": "초과", "lt": "미만"}.get(
                 c.operator.value, c.operator.value
-            )
-            lines.append(f"출판연도 - {c.value}년 {op}")
-        elif c.type == "purpose_context":
-            lines.append(f"독서 맥락 - {c.value}")
-        elif c.type == "custom":
-            lines.append(f"제약(자연어) - {c.raw or c.value}")
-
     return "\n".join(lines) if lines else "정보 없음"
 
 
@@ -346,14 +330,6 @@ def _fallback_keywords(context: SessionContext) -> list[str]:
     if slots.length.is_filled() and slots.length.level:
         _LEN_KW = {"short": "짧은", "medium": "적당한", "long": "긴"}
         keywords.append(_LEN_KW.get(slots.length.level.value, ""))
-
-    # constraints 키워드 추가
-    # custom: 자연어 그대로 / author: 검색 키워드로 포함
-    for c in slots.constraints:
-        if c.type == "custom" and c.raw:
-            keywords.append(c.raw)
-        elif c.type == "author" and c.value:
-            keywords.append(str(c.value))
 
     return keywords[:7]  # 최대 7개
 
