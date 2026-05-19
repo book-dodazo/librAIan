@@ -32,7 +32,7 @@ from typing import Any
 
 from app.core.exceptions import IntentParseError, LLMCallError
 from app.modules.llm.clova_client import chat_complete_json
-from backend.app.docs.prompts import INTENT_SYSTEM_PROMPT, build_intent_messages
+from app.prompts.intent import INTENT_SYSTEM_PROMPT, build_intent_messages
 from app.schemas.chat import ExtractedIntent, IntentType
 
 logger = logging.getLogger(__name__)

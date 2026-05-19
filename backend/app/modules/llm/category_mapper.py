@@ -70,6 +70,17 @@ _FINE_TO_COARSE: dict[str, str] = _build_fine_to_coarse(_TREE)
 COARSE_CATEGORIES: list[str] = list(_TREE.keys())  # 대분류 목록 (LLM 폴백용)
 
 
+def _normalize(s: str) -> str:
+    """공백 제거 정규화 — "현대 소설" → "현대소설"."""
+    return "".join(s.split())
+
+
+# 정규화된 fine → coarse 역방향 매핑 (공백 제거 기준)
+_FINE_TO_COARSE_NORMALIZED: dict[str, str] = {
+    _normalize(k): v for k, v in _FINE_TO_COARSE.items()
+}
+
+
 def get_coarse_category(fine: str) -> Optional[str]:
     """
     중분류 → 대분류 변환 (매핑 테이블 기반)
@@ -84,9 +95,10 @@ def get_coarse_category(fine: str) -> Optional[str]:
         - 매핑 실패: None → LLM 폴백 또는 전체 범위 검색
 
     예시:
-        get_coarse_category("한국소설") → "소설"
-        get_coarse_category("심리학")   → "인문"
-        get_coarse_category("SF")       → None  (매핑 없음)
+        get_coarse_category("한국소설")  → "소설"
+        get_coarse_category("현대 소설") → "소설"  (공백 정규화)
+        get_coarse_category("심리학")    → "인문"
+        get_coarse_category("SF")        → None  (매핑 없음)
     """
     if not fine:
         return None
@@ -97,19 +109,62 @@ def get_coarse_category(fine: str) -> Optional[str]:
         logger.debug("카테고리 매핑 성공: %s → %s", fine, coarse)
         return coarse
 
-    # 2. 부분 매칭 시도
-    # 주의: 오매핑 방지를 위해 입력값이 키의 앞부분과 일치하는 경우만 허용
-    # 예) "한국 근현대사" → "한국사" 포함 X, "역사/문화" 키워드 포함 O
-    for fine_key, coarse_val in _FINE_TO_COARSE.items():
-        # fine_key 가 입력값으로 시작하는 경우만 매칭
-        # 예) fine="한국사", fine_key="한국사" → 정확 매칭 (위에서 처리됨)
-        # 너무 짧은 단어(2글자 이하)는 부분 매칭 제외 (오매핑 방지)
-        if len(fine) > 2 and fine_key.startswith(fine):
-            logger.debug("카테고리 부분 매핑: %s → %s (via %s)", fine, coarse_val, fine_key)
-            return coarse_val
+    # 2. 공백 제거 후 재시도 ("현대 소설" → "현대소설")
+    normalized = _normalize(fine)
+    if normalized in _FINE_TO_COARSE_NORMALIZED:
+        coarse = _FINE_TO_COARSE_NORMALIZED[normalized]
+        logger.debug("카테고리 공백 정규화 매핑: %s → %s", fine, coarse)
+        return coarse
 
-    # 3. 매핑 실패 → None 반환 (LLM 폴백은 호출부에서 처리)
+    # 3. 부분 매칭 시도 (정규화된 키 기준)
+    # 오매핑 방지: 1글자 제외 (한글 2글자 = 과학/소설/인문 등 허용)
+    if len(normalized) >= 2:
+        for norm_key, coarse_val in _FINE_TO_COARSE_NORMALIZED.items():
+            if norm_key.startswith(normalized):
+                logger.debug("카테고리 부분 매핑: %s → %s", fine, coarse_val)
+                return coarse_val
+
+    # 4. 매핑 실패 → None 반환 (LLM 폴백은 호출부에서 처리)
     logger.debug("카테고리 매핑 실패: %s → None (LLM 폴백 필요)", fine)
+    return None
+
+
+def get_canonical_fine(free_form: str) -> Optional[str]:
+    """
+    자유형 주제어 → 카테고리 트리의 정규 중분류(cate_depth2) 값으로 변환
+
+    1. 정확 매칭: "한국소설" → "한국소설"
+    2. 부분 매칭: 트리 키가 입력값으로 시작하거나, 입력값이 트리 키로 시작하는 경우
+    3. 실패 → None (자유형 그대로 유지)
+
+    예)
+        get_canonical_fine("한국소설") → "한국소설"
+        get_canonical_fine("한국사")   → "한국사" (정확 매칭)
+        get_canonical_fine("SF")       → None (매핑 없음)
+        get_canonical_fine("파이썬")   → None (트리에 없음)
+    """
+    if not free_form:
+        return None
+
+    # 1. 정확 매칭
+    if free_form in _FINE_TO_COARSE:
+        return free_form
+
+    # 2. 공백 제거 후 정규화 매칭 ("현대 소설" → "현대소설")
+    normalized = _normalize(free_form)
+    if normalized in _FINE_TO_COARSE_NORMALIZED:
+        canonical = next(k for k in _FINE_TO_COARSE if _normalize(k) == normalized)
+        logger.debug("중분류 공백 정규화 매칭: %s → %s", free_form, canonical)
+        return canonical
+
+    # 3. 부분 매칭 (2글자 이상, 정규화 기준)
+    if len(normalized) >= 2:
+        for fine_key in _FINE_TO_COARSE:
+            norm_key = _normalize(fine_key)
+            if norm_key.startswith(normalized) or normalized.startswith(norm_key):
+                logger.debug("중분류 부분 매칭: %s → %s", free_form, fine_key)
+                return fine_key
+
     return None
 
 

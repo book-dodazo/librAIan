@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(Get-Content \"c:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\\\\logs\\\\turns\\\\turns.jsonl\" -Tail 80)",
+      "Bash(python -c \"import sys,json; lines=[l.strip\\(\\) for l in sys.stdin if l.strip\\(\\)]; [print\\(json.dumps\\(json.loads\\(l\\), ensure_ascii=False, indent=2\\)\\) for l in lines[-3:]]\")",
+      "Bash(python3 -c \"import sys,json; [print\\(json.dumps\\(json.loads\\(l\\), ensure_ascii=False, indent=2\\)\\) for l in sys.stdin if l.strip\\(\\)]\")"
+    ]
+  }
+}

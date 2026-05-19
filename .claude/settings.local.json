@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PATH = $env:PATH + \";C:\\\\Program Files\\\\nodejs\"; Set-Location \"c:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\frontend\"; & \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install)",
+      "Read(//c/Program Files/**)",
+      "Bash(del \"c:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\frontend\\\\src\\\\services\\\\api.js\")",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:dl.acm.org)",
+      "WebFetch(domain:aclanthology.org)",
+      "Bash(python -c \"import json; d=json.load\\(open\\(r'c:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\\\\app\\\\modules\\\\llm\\\\category_tree.json', encoding='utf-8'\\)\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
+      "Bash(python -c \"import json, sys; sys.stdout.reconfigure\\(encoding='utf-8'\\); d=json.load\\(open\\(r'c:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\\\\app\\\\modules\\\\llm\\\\category_tree.json', encoding='utf-8'\\)\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

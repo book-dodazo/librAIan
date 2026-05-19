@@ -332,6 +332,33 @@ def should_exclude_youth_categories(result):
 
     return True
 
+YOUTH_EXCLUDE_CATEGORIES = [
+    "어린이",
+    "유아",
+    "고등학교 참고서",
+    "중학교 참고서",
+    "초등학교 참고서"
+]
+
+
+def should_exclude_child_categories_for_youth(result):
+    age = result.get("onboarding_signals", {}).get("age")
+
+    # 청소년: 11~19세
+    if age is None or not (11 <= age <= 19):
+        return False
+
+    requested_large_cates = (
+        result.get("filters", {}).get("cate_depth1")
+        or []
+    )
+
+    # 사용자가 명시적으로 해당 카테고리를 요청했다면 제외하지 않음
+    if any(cate in YOUTH_EXCLUDE_CATEGORIES for cate in requested_large_cates):
+        return False
+
+    return True
+
 #==================================================================
 #                            BM25 full
 #==================================================================
@@ -364,6 +391,7 @@ def full_bm25(
     index_name="books_review_full",
     size=20,
     small_category_embeddings=None,
+    embedding_field = "embedding"
     ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -393,6 +421,14 @@ def full_bm25(
         must_not_clause.append({
             "terms": {
                 "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
             }
         })
 
@@ -691,6 +727,13 @@ def chunk_bm25(
             }
         })
 
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
+            }
+        })
+
     if coarse_categories:
         filter_clause.append({
             "terms": {
@@ -957,7 +1000,8 @@ def full_dense(
     index_name="books_review_full",
     size=20,
     num_candidates=100,
-    small_category_embeddings=None
+    small_category_embeddings=None,
+    embedding_field="embedding"
 
 ):
     if small_category_embeddings is None:
@@ -990,6 +1034,13 @@ def full_dense(
         must_not_clause.append({
             "terms": {
                 "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
             }
         })
 
@@ -1098,7 +1149,7 @@ def full_dense(
     query_body = {
         "size": size,
         "knn": {
-            "field": "embedding",
+            "field": embedding_field,
             "query_vector": query_vector,
             "k": size,
             "num_candidates": num_candidates,
@@ -1197,6 +1248,7 @@ def chunk_dense(
     candidate_size=100,
     top_k_per_book=3,
     small_category_embeddings=None,
+    embedding_field="embedding"
     
 ):  
     if small_category_embeddings is None:
@@ -1229,6 +1281,13 @@ def chunk_dense(
         must_not_clause.append({
             "terms": {
                 "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
             }
         })
 
@@ -1367,7 +1426,7 @@ def chunk_dense(
     query_body = {
         "size": candidate_size,
         "knn": {
-            "field": "embedding",
+            "field": embedding_field,
             "query_vector": query_vector,
             "k": candidate_size,
             "num_candidates": num_candidates,
@@ -1532,7 +1591,8 @@ def full_hybrid(
     rrf_k=60,
     bm25_weight=1.0,
     dense_weight=1.0,
-    small_category_embeddings=None
+    small_category_embeddings=None,
+    embedding_field="embedding"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -1554,7 +1614,8 @@ def full_hybrid(
         index_name="books_review_full",
         size=dense_candidate_size,
         num_candidates=num_candidates,
-        small_category_embeddings=small_category_embeddings
+        small_category_embeddings=small_category_embeddings,
+        embedding_field=embedding_field
     )
 
     merged = {}
@@ -1658,7 +1719,8 @@ def chunk_hybrid(
     require_both=False,
     overlap_bonus=0.0,
     rrf_k=60,
-    small_category_embeddings=None
+    small_category_embeddings=None,
+    embedding_field="embedding"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -1679,7 +1741,8 @@ def chunk_hybrid(
         candidate_size=dense_candidate_size,
         num_candidates=num_candidates,
         top_k_per_book=top_k_per_book,
-        small_category_embeddings=small_category_embeddings
+        small_category_embeddings=small_category_embeddings,
+        embedding_field=embedding_field
     )
 
     merged = {}

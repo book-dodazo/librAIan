@@ -14,6 +14,7 @@
     POST /api/chat   : 사용자 질의 처리 (slot filling + RAG 쿼리 생성)
     GET  /api/health : 서버 상태 확인
 """
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, status
@@ -21,6 +22,8 @@ from fastapi import APIRouter, HTTPException, status
 from app.core.exceptions import LLMCallError
 from app.schemas.chat_schema import ChatRequest, SlotChatResponse
 from app.services.chat_service import chat_service
+
+_REQUEST_TIMEOUT = 90  # 초 — 요청 전체 타임아웃
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +47,16 @@ router = APIRouter(prefix="/api", tags=["chat"])
 )
 async def chat_endpoint(request: ChatRequest) -> SlotChatResponse:
     try:
-        return await chat_service.handle(request)
+        return await asyncio.wait_for(
+            chat_service.handle(request),
+            timeout=_REQUEST_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.error("요청 타임아웃: %ds 초과", _REQUEST_TIMEOUT)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"응답 시간이 {_REQUEST_TIMEOUT}초를 초과했습니다. 잠시 후 다시 시도해 주세요.",
+        )
     except LLMCallError as e:
         logger.error("처리되지 않은 LLM 오류: %s", e)
         raise HTTPException(

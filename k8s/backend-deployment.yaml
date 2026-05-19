@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: libraian
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          # CI가 kubectl set image 로 커밋 SHA 태그로 교체합니다.
+          # CI가 kubectl set image 로 커밋 SHA 태그로 교체합니다.
+          # YOUR_ACCOUNT_ID → 실제 AWS 계정 ID (12자리)로 교체하세요.
+          image: YOUR_ACCOUNT_ID.dkr.ecr.ap-northeast-2.amazonaws.com/libraian/backend:latest
+          ports:
+            - containerPort: 8000
+          # ConfigMap (비민감) + Secret (민감) 환경변수 주입
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+          # 헬스체크 — 파드가 준비됐을 때만 트래픽 수신
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds:        5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds:        15
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "256Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "512Mi"
