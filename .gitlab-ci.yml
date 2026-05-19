@@ -5,6 +5,7 @@ stages:
 variables:
   BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:latest
   FRONTEND_IMAGE: $CI_REGISTRY_IMAGE/frontend:latest
+  DOCKER_HOST: unix:///var/run/docker.sock
 
 build-backend:
   stage: build
