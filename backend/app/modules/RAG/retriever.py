@@ -332,6 +332,33 @@ def should_exclude_youth_categories(result):
 
     return True
 
+YOUTH_EXCLUDE_CATEGORIES = [
+    "어린이",
+    "유아",
+    "고등학교 참고서",
+    "중학교 참고서",
+    "초등학교 참고서"
+]
+
+
+def should_exclude_child_categories_for_youth(result):
+    age = result.get("onboarding_signals", {}).get("age")
+
+    # 청소년: 11~19세
+    if age is None or not (11 <= age <= 19):
+        return False
+
+    requested_large_cates = (
+        result.get("filters", {}).get("cate_depth1")
+        or []
+    )
+
+    # 사용자가 명시적으로 해당 카테고리를 요청했다면 제외하지 않음
+    if any(cate in YOUTH_EXCLUDE_CATEGORIES for cate in requested_large_cates):
+        return False
+
+    return True
+
 #==================================================================
 #                            BM25 full
 #==================================================================
@@ -393,6 +420,14 @@ def full_bm25(
         must_not_clause.append({
             "terms": {
                 "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
             }
         })
 
@@ -688,6 +723,13 @@ def chunk_bm25(
         must_not_clause.append({
             "terms": {
                 "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
             }
         })
 
@@ -993,6 +1035,13 @@ def full_dense(
             }
         })
 
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
+            }
+        })
+
     if coarse_categories:
         filter_clause.append({
             "terms": {
@@ -1229,6 +1278,13 @@ def chunk_dense(
         must_not_clause.append({
             "terms": {
                 "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
             }
         })
 
