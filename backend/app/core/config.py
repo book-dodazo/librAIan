@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # ── AWS ──────────────────────────────────────────────
     AWS_PUBLIC_IP: str
 
+    # ── JWT ──────────────────────────────────────────────
+    JWT_SECRET: str = "change-this-secret-in-production"
+
     # ── 앱 일반 ──────────────────────────────────────────────
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"

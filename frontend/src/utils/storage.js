@@ -3,9 +3,24 @@
 
 const KEYS = {
   USER:            'user',
+  TOKEN:           'token',
   ONBOARDING:      'onboardingData',
   FEEDBACK_HISTORY: 'feedbackHistory',
 };
+
+// ── 토큰 ────────────────────────────────────────────
+export function getToken() {
+  try { return JSON.parse(localStorage.getItem(KEYS.TOKEN) ?? 'null'); }
+  catch { return null; }
+}
+
+export function saveToken(token) {
+  localStorage.setItem(KEYS.TOKEN, JSON.stringify(token));
+}
+
+export function removeToken() {
+  localStorage.removeItem(KEYS.TOKEN);
+}
 
 // ── 사용자 ──────────────────────────────────────────
 export function getUser() {
