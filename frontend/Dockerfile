@@ -4,7 +4,7 @@ WORKDIR /app
 
 # 의존성 먼저 복사 (레이어 캐시 활용 — 코드만 바뀌면 npm install 생략)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
 
