@@ -1,0 +1,38 @@
+services:
+  backend:
+    image: registry.gitlab.com/boook-dodazo/librain/backend:latest
+    container_name: librain-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # 비밀값 — GitLab CI/CD Variables에서 주입
+      CLOVA_API_KEY: ${CLOVA_API_KEY}
+      NARU_API_KEY: ${NARU_API_KEY}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # 고정값
+      CLOVA_MODEL: HCX-DASH-002
+      CLOVA_BASE_URL: https://clovastudio.stream.ntruss.com/v1/openai
+      NARU_API_URL: http://data4library.kr/api
+      NARU_LIB_CODE: "111003"
+      ELASTIC_URL: https://host.docker.internal:9200
+      ELASTIC_USER: elastic
+      DB_HOST: host.docker.internal
+      DB_PORT: "5432"
+      DB_NAME: book_db
+      DB_USER: ${DB_USER}
+      AWS_PUBLIC_IP: "54.175.156.56"
+      APP_ENV: production
+      LOG_LEVEL: INFO
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    image: registry.gitlab.com/boook-dodazo/librain/frontend:latest
+    container_name: librain-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
