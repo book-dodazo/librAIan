@@ -212,9 +212,6 @@ def _summarize_slots(context: SessionContext) -> str:
         if loc_parts:
             lines.append(f"대출 지역/도서관 - {', '.join(loc_parts)}")
 
-        elif c.type == "pub_year" and c.value and c.operator:
-            op = {"gte": "이후", "lte": "이전", "gt": "초과", "lt": "미만"}.get(
-                c.operator.value, c.operator.value
     return "\n".join(lines) if lines else "정보 없음"
 
 
