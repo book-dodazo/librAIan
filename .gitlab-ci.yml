@@ -5,11 +5,9 @@ stages:
 variables:
   BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:latest
   FRONTEND_IMAGE: $CI_REGISTRY_IMAGE/frontend:latest
-  DOCKER_HOST: unix:///var/run/docker.sock
 
 build-backend:
   stage: build
-  image: docker:27
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
@@ -20,7 +18,6 @@ build-backend:
 
 build-frontend:
   stage: build
-  image: docker:27
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
@@ -31,7 +28,6 @@ build-frontend:
 
 deploy:
   stage: deploy
-  image: docker:27
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
