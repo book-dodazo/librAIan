@@ -88,7 +88,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
     getCategories()
       .then(data => {
         setCategoryTree(data);
-        setActiveMain(Object.keys(data)[0] || '');
+        setActiveMain('');
       })
       .catch(() => {});
   }, []);
@@ -240,7 +240,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
   // ── Step 2: categories ───────────────────────────────────────
   if (step === 'categories') {
     const mainList = Object.keys(categoryTree);
-    const subs = categoryTree[activeMain] || [];
+    const subs = activeMain ? (categoryTree[activeMain] || []) : [];
 
     const toggleSub = (sub) => {
       const exists = selectedCats.find(c => c.main === activeMain && c.sub === sub);
@@ -251,58 +251,94 @@ export default function OnboardingFlow({ onComplete, loading }) {
       }
     };
 
+    const countForMain = (main) => selectedCats.filter(c => c.main === main).length;
+
+    const handleMainClick = (main) => {
+      setActiveMain(prev => prev === main ? '' : main);
+    };
+
     return (
       <div className="w-full max-w-sm">
         <Progress />
         <div className="mb-4">
           <h2 className="text-sm font-medium text-ink mb-1">{STEP_TITLES[step]}</h2>
           <p className="text-xs text-ink-muted">
-            최대 3개 선택&nbsp;<span className="text-ink">({selectedCats.length}/3)</span>
+            최대 3개 선택&nbsp;<span className="text-ink font-medium">({selectedCats.length}/3)</span>
           </p>
         </div>
 
-        {/* 대분류 탭 */}
-        <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3">
-          {mainList.map(main => (
-            <button key={main} onClick={() => setActiveMain(main)}
-              className={`flex-none text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
-                activeMain === main
-                  ? 'bg-ink text-paper border-ink'
-                  : 'border-ink/15 text-ink-muted hover:border-ink/40'
-              }`}>
-              {main}
-            </button>
-          ))}
-        </div>
-
-        {/* 중분류 그리드 */}
-        <div className="grid grid-cols-2 gap-1.5 mb-3 max-h-52 overflow-y-auto">
-          {subs.map(sub => {
-            const isSelected = !!selectedCats.find(c => c.main === activeMain && c.sub === sub);
-            const maxReached = !isSelected && selectedCats.length >= 3;
+        {/* 대분류 블록 그리드 */}
+        <div className="grid grid-cols-3 gap-1.5 mb-3">
+          {mainList.map(main => {
+            const count = countForMain(main);
+            const isActive = activeMain === main;
             return (
-              <button key={sub} onClick={() => toggleSub(sub)} disabled={maxReached}
-                className={`text-xs px-3 py-2 rounded border text-left transition-colors ${
-                  isSelected
-                    ? 'bg-ink text-paper border-ink'
-                    : maxReached
-                    ? 'border-ink/10 text-ink/25 cursor-not-allowed'
-                    : 'border-ink/15 text-ink hover:border-ink/40'
-                }`}>
-                {sub}
+              <button
+                key={main}
+                onClick={() => handleMainClick(main)}
+                className={`relative text-[11px] leading-tight px-2 py-2.5 rounded-lg border text-center transition-all duration-150 ${
+                  isActive
+                    ? 'bg-ink text-paper border-ink shadow-sm'
+                    : count > 0
+                    ? 'border-ink/50 text-ink bg-ink/5'
+                    : 'border-ink/12 text-ink-muted hover:border-ink/35 hover:text-ink hover:bg-ink/3'
+                }`}
+              >
+                {main}
+                {count > 0 && (
+                  <span className={`absolute top-1 right-1 text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-semibold ${
+                    isActive ? 'bg-paper text-ink' : 'bg-ink text-paper'
+                  }`}>
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
+        {/* 중분류 패널 */}
+        {activeMain && (
+          <div className="border border-ink/12 rounded-lg p-3 mb-3 bg-paper-2/40">
+            <p className="text-[11px] font-medium text-ink-muted mb-2">{activeMain}</p>
+            <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto">
+              {subs.map(sub => {
+                const isSelected = !!selectedCats.find(c => c.main === activeMain && c.sub === sub);
+                const maxReached = !isSelected && selectedCats.length >= 3;
+                return (
+                  <button
+                    key={sub}
+                    onClick={() => toggleSub(sub)}
+                    disabled={maxReached}
+                    className={`text-xs px-3 py-2 rounded-md border text-left transition-colors ${
+                      isSelected
+                        ? 'bg-ink text-paper border-ink'
+                        : maxReached
+                        ? 'border-ink/8 text-ink/20 cursor-not-allowed'
+                        : 'border-ink/15 text-ink hover:border-ink/40 hover:bg-ink/3'
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 선택된 카테고리 칩 */}
         {selectedCats.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-4">
             {selectedCats.map((c, i) => (
-              <span key={i} className="flex items-center gap-1 text-xs bg-ink/5 border border-ink/10 rounded-full px-2.5 py-1">
-                <span className="text-ink-muted">{c.main} ·</span> {c.sub}
-                <button onClick={() => setSelectedCats(p => p.filter((_, j) => j !== i))}
-                  className="text-ink-muted hover:text-ink ml-0.5">✕</button>
+              <span key={i} className="flex items-center gap-1 text-xs bg-ink/5 border border-ink/12 rounded-full px-2.5 py-1">
+                <span className="text-ink-muted">{c.main} ·</span>
+                <span className="text-ink">{c.sub}</span>
+                <button
+                  onClick={() => setSelectedCats(p => p.filter((_, j) => j !== i))}
+                  className="text-ink/30 hover:text-ink ml-0.5 leading-none"
+                >
+                  ✕
+                </button>
               </span>
             ))}
           </div>
