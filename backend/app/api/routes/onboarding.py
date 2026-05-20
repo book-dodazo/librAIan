@@ -60,9 +60,10 @@ def search_libraries(q: str = Query(..., min_length=1)):
         )
         resp.raise_for_status()
         data = resp.json()
-        libs = data.get("response", {}).get("libs", {}).get("lib", [])
-        if isinstance(libs, dict):
-            libs = [libs]
+        libs_raw = data.get("response", {}).get("libs", [])
+        if isinstance(libs_raw, dict):
+            libs_raw = [libs_raw]
+        libs = [item["lib"] for item in libs_raw if isinstance(item, dict) and "lib" in item]
         return [
             {"name": lib.get("libName", ""), "address": lib.get("address", "")}
             for lib in libs
