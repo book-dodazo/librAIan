@@ -13,7 +13,7 @@ from app.db.database import get_db
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 logger = logging.getLogger(__name__)
 
-_CATEGORY_PATH = Path(__file__).parents[3] / "modules/llm/category_tree.json"
+_CATEGORY_PATH = Path(__file__).parents[2] / "modules/llm/category_tree.json"
 
 _EXCLUDED_CATS = {
     "어린이(초등)", "유아(0~7세)", "취업/수험서", "중/고등참고서",
