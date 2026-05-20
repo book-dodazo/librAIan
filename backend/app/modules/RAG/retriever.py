@@ -9,7 +9,7 @@ from pathlib import Path
 from app.core.config import settings
 from dotenv import load_dotenv
 import json
-
+from sentence_transformers import SentenceTransformer
 
 # 함수 사용법
 # full_bm25(result)
@@ -58,7 +58,8 @@ def make_headers():
         "Content-Type": "application/json"
     }
 
-def get_embedding(text, max_retries=10, timeout=30):
+
+def get_clova_embedding(text, max_retries=10, timeout=30):
     payload = {
         "text": text
     }
@@ -86,6 +87,36 @@ def get_embedding(text, max_retries=10, timeout=30):
             wait = min(30, (2 ** attempt) + random.uniform(0, 1))
             print(f"[재시도 {attempt+1}/{max_retries}] {wait:.1f}초 대기 → {e}")
             time.sleep(wait)
+
+_embedding_models = {}
+
+def load_embedding_model(model_name):
+    if model_name not in _embedding_models:
+        if model_name == "bge_m3_ko":
+            _embedding_models[model_name] = SentenceTransformer("BAAI/bge-m3")
+        elif model_name == "kure":
+            _embedding_models[model_name] = SentenceTransformer("nlpai-lab/KURE-v1")
+        else:
+            raise ValueError(f"Unknown local embedding model: {model_name}")
+    return _embedding_models[model_name]
+
+def get_local_embedding(text, embedding_model):
+    model = load_embedding_model(embedding_model)
+    emb = model.encode(
+        text,
+        normalize_embeddings=True
+    )
+
+    return emb.tolist()
+
+def get_embedding(text, embedding_model="clova"):
+    if embedding_model == "clova":
+        return get_clova_embedding(text)
+
+    if embedding_model in ["bge_m3_ko", "kure"]:
+        return get_local_embedding(text, embedding_model)
+
+    raise ValueError(f"Unknown embedding_model: {embedding_model}")
 
 def cosine_similarity(a, b):
     a = np.array(a).flatten()
@@ -1001,7 +1032,8 @@ def full_dense(
     size=20,
     num_candidates=100,
     small_category_embeddings=None,
-    embedding_field="embedding"
+    embedding_field="embedding_kure",
+    embedding_model="kure"
 
 ):
     if small_category_embeddings is None:
@@ -1144,7 +1176,10 @@ def full_dense(
                     }
                 })
 
-    query_vector = get_embedding(semantic_query)
+    query_vector = get_embedding(
+            semantic_query,
+            embedding_model=embedding_model
+        )
 
     query_body = {
         "size": size,
@@ -1248,7 +1283,8 @@ def chunk_dense(
     candidate_size=100,
     top_k_per_book=3,
     small_category_embeddings=None,
-    embedding_field="embedding"
+    embedding_field="embedding_kure",
+    embedding_model="kure"
     
 ):  
     if small_category_embeddings is None:
@@ -1421,7 +1457,10 @@ def chunk_dense(
 
                 )
 
-    query_vector = get_embedding(semantic_query)
+    query_vector = get_embedding(
+            semantic_query,
+            embedding_model=embedding_model
+        )
 
     query_body = {
         "size": candidate_size,
@@ -1592,7 +1631,7 @@ def full_hybrid(
     bm25_weight=1.0,
     dense_weight=1.0,
     small_category_embeddings=None,
-    embedding_field="embedding"
+    embedding_field="embedding_kure"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -1720,7 +1759,7 @@ def chunk_hybrid(
     overlap_bonus=0.0,
     rrf_k=60,
     small_category_embeddings=None,
-    embedding_field="embedding"
+    embedding_field="embedding_kure"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
