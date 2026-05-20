@@ -36,9 +36,6 @@ class Settings(BaseSettings):
     NARU_API_URL : str = "http://data4library.kr/api"
     NARU_LIB_CODE: str = ""
 
-    APP_ENV: str = "development"
-    LOG_LEVEL: str = "INFO"
-
     # ── Elasticsearch ───────────────────────────────────────
     ELASTIC_URL: str
     ELASTIC_USER: str

@@ -157,6 +157,7 @@ async def extract_slots(
             messages      = suf_messages,
             temperature   = 0.1,
             max_tokens    = 300,
+            model         = "HCX-007",
         )
         context.rag_ready_from_llm  = bool(suf_raw.get("rag_ready", False))
         context.llm_confidence      = int(suf_raw.get("confidence", 100))

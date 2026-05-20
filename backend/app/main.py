@@ -32,6 +32,7 @@ from app.core.config import settings
 from app.api.routes.chat import router as chat_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.profile import router as profile_router
+from app.api.routes.onboarding import router as onboarding_router
 from app.db.database import engine, Base
 import app.models.user  # noqa: F401 — 테이블 생성을 위해 import
 
@@ -73,6 +74,7 @@ Base.metadata.create_all(bind=engine)
 app.include_router(chat_router)
 app.include_router(auth_router)
 app.include_router(profile_router)
+app.include_router(onboarding_router)
 
 # ── 템플릿 설정 ───────────────────────────────────────────────
 templates = Jinja2Templates(directory="app/templates")
