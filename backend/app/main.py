@@ -68,7 +68,10 @@ app.add_middleware(
 )
 
 # ── DB 테이블 생성 ────────────────────────────────────────────
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as _db_err:
+    logging.getLogger(__name__).warning("DB 연결 실패 — 테이블 생성 생략: %s", _db_err)
 
 # ── 라우터 등록 ───────────────────────────────────────────────
 app.include_router(chat_router)
