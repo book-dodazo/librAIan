@@ -29,7 +29,17 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail ?? `API 오류 (${response.status})`);
+    const detail = errorData.detail;
+    let message;
+    if (typeof detail === 'string') {
+      message = detail;
+    } else if (Array.isArray(detail) && detail.length > 0) {
+      // Pydantic 유효성 검사 에러: [{ loc, msg, type }, ...]
+      message = detail.map(d => d.msg ?? String(d)).join(', ');
+    } else {
+      message = `API 오류 (${response.status})`;
+    }
+    throw new Error(message);
   }
 
   return response.json();
