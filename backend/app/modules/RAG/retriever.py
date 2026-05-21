@@ -51,7 +51,6 @@ def get_small_category_embeddings():
     return _small_cate_cache
 
 def make_headers():
-
     return {
         "Authorization": f"Bearer {CLOVA_API_KEY}",
         "X-NCP-CLOVASTUDIO-REQUEST-ID": str(uuid.uuid4()),
@@ -128,9 +127,13 @@ def get_similar_small_categories(
     subject,
     small_category_embeddings,
     top_k=20,
-    threshold=0.7
+    threshold=0.7,
+    embedding_model="kure"
 ):
-    query_vec = get_embedding(subject)
+    query_vec = get_embedding(
+        subject,
+        embedding_model=embedding_model
+        )
 
     results = []
 
@@ -201,7 +204,7 @@ def parse_page_conditions(page_range, around_margin=30):
     return page_filter, []
 
 mid_bonus = 0.08
-small_bonus = 0.05
+small_bonus = 0.00
 
 #==================================================================
 #                          온보딩 데이터 검색
