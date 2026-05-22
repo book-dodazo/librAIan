@@ -4,8 +4,13 @@ import { useNavigate } from 'react-router-dom';
  * 도서 추천 결과 카드
  *
  * props:
- *   results         - search_results: [{rank, isbn, score}]
- *   availabilityIndex - availability_index: {isbn: {has_book, loan_available}}
+ *   results - search_results: [{
+ *     isbn, title, author, publisher,
+ *     cover_url, book_intro, recommendation_reason,
+ *     loan_available, has_book, final_rank, final_score
+ *   }]
+ *   availabilityIndex - (선택) availability_index: {isbn: {has_book, loan_available}}
+ *                       book 객체 안에 이미 포함된 경우 우선 사용
  */
 export default function BookResults({ results = [], availabilityIndex = {} }) {
   const navigate = useNavigate();
@@ -15,46 +20,100 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
   return (
     <div className="mt-3">
       <p className="text-[10px] tracking-widest uppercase text-ink-muted mb-3">추천 도서</p>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         {results.map((book, i) => {
-          const avail = availabilityIndex[book.isbn];
-          const available = avail?.loan_available === 'Y';
-          const hasBook = avail?.has_book === 'Y';
+          // availability: book 객체 안에 있으면 우선 사용, 없으면 availabilityIndex fallback
+          const avail = availabilityIndex[book.isbn] ?? {};
+          const loanAvailable = book.loan_available ?? avail.loan_available;
+          const hasBook = book.has_book ?? avail.has_book;
+
+          const available = loanAvailable === 'Y';
+          const inStock  = hasBook === 'Y';
+          const checked  = loanAvailable !== undefined && loanAvailable !== '-';
 
           return (
             <div
               key={book.isbn ?? i}
-              className="bg-white border border-ink/10 rounded-lg px-4 py-3 flex items-center justify-between gap-4"
+              className="bg-white border border-ink/10 rounded-xl overflow-hidden"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-7 h-7 rounded bg-paper-2 flex items-center justify-center text-xs font-bold text-ink-muted flex-shrink-0">
-                  {book.rank ?? i + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink truncate">
-                    {/* ISBN으로 실제 책 제목을 가져오려면 도서 API 연동 필요 */}
-                    ISBN {book.isbn}
-                  </p>
-                  {book.score !== undefined && (
-                    <p className="text-xs text-ink-muted">관련도 {book.score.toFixed(2)}</p>
+              {/* 상단: 표지 + 기본 정보 */}
+              <div className="flex gap-3 p-4">
+                {/* 책 표지 */}
+                {book.cover_url ? (
+                  <img
+                    src={book.cover_url}
+                    alt={book.title}
+                    className="w-16 h-22 object-cover rounded flex-shrink-0 shadow-sm"
+                    style={{ height: '88px' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="w-16 flex-shrink-0 bg-paper-2 rounded flex items-center justify-center"
+                       style={{ height: '88px' }}>
+                    <span className="text-ink-muted text-xs">📚</span>
+                  </div>
+                )}
+
+                {/* 제목 / 저자 / 대출 상태 */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">
+                        {book.title || `ISBN ${book.isbn}`}
+                      </p>
+                      {/* 순위 뱃지 */}
+                      <span className="w-5 h-5 rounded-full bg-paper-2 flex items-center justify-center text-[10px] font-bold text-ink-muted flex-shrink-0 mt-0.5">
+                        {book.final_rank ?? i + 1}
+                      </span>
+                    </div>
+                    {book.author && (
+                      <p className="text-xs text-ink-muted mt-0.5 truncate">{book.author}</p>
+                    )}
+                    {book.publisher && (
+                      <p className="text-xs text-ink-muted/70 truncate">{book.publisher}</p>
+                    )}
+                  </div>
+
+                  {/* 대출 가능 여부 */}
+                  {checked ? (
+                    <span
+                      className={`self-start mt-1.5 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                        available
+                          ? 'bg-green-50 text-green-700 border border-green-100'
+                          : inStock
+                          ? 'bg-orange-50 text-orange-700 border border-orange-100'
+                          : 'bg-paper-3 text-ink-muted border border-ink/10'
+                      }`}
+                    >
+                      {available ? '대출 가능' : inStock ? '대출 중' : '미보유'}
+                    </span>
+                  ) : (
+                    <span className="self-start mt-1.5 text-[11px] text-ink-muted/60">
+                      대출 정보 없음
+                    </span>
                   )}
                 </div>
               </div>
 
-              {avail ? (
-                <span
-                  className={`text-[11px] px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${
-                    available
-                      ? 'bg-green-50 text-green-700 border border-green-100'
-                      : hasBook
-                      ? 'bg-orange-50 text-orange-700 border border-orange-100'
-                      : 'bg-paper-3 text-ink-muted'
-                  }`}
-                >
-                  {available ? '대출 가능' : hasBook ? '대출 중' : '미보유'}
-                </span>
-              ) : (
-                <span className="text-[11px] text-ink-muted flex-shrink-0">확인 중</span>
+              {/* 추천 이유 */}
+              {book.recommendation_reason && (
+                <div className="px-4 pb-4">
+                  <div className="bg-paper-2/60 rounded-lg p-3">
+                    <p className="text-[11px] font-medium text-ink-muted mb-1">추천 이유</p>
+                    <p className="text-xs text-ink leading-relaxed">
+                      {book.recommendation_reason}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 책 소개 (있을 경우) */}
+              {book.book_intro && !book.recommendation_reason && (
+                <div className="px-4 pb-4">
+                  <p className="text-xs text-ink-muted leading-relaxed line-clamp-3">
+                    {book.book_intro}
+                  </p>
+                </div>
               )}
             </div>
           );
