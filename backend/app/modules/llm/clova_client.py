@@ -70,7 +70,7 @@ async def chat_complete(
     messages: list[dict],
     *,
     temperature: float = 0.3,
-    max_tokens: int = 512,
+    max_tokens: int | None = 512,
     model: str | None = None,
 ) -> str:
     """
@@ -80,7 +80,7 @@ async def chat_complete(
         system_prompt: 모델의 역할/지시사항을 정의하는 시스템 메시지
         messages     : [{"role": "user"|"assistant", "content": "..."}, ...]
         temperature  : 낮을수록 일관된 답변 (의도 분류엔 0.2 권장)
-        max_tokens   : 최대 출력 토큰 수
+        max_tokens   : 최대 출력 토큰 수 (None 이면 파라미터 자체를 생략 — HCX-007 등)
 
     Returns:
         모델이 생성한 텍스트 문자열
@@ -96,12 +96,15 @@ async def chat_complete(
 
     full_messages = [{"role": "system", "content": system_prompt}] + messages
 
+    # HCX-007 등 max_tokens 미지원 모델은 파라미터 생략
+    extra = {} if max_tokens is None else {"max_tokens": max_tokens}
+
     try:
         response = await _client.chat.completions.create(
             model=model or settings.CLOVA_MODEL,
             messages=full_messages,
             temperature=temperature,
-            max_tokens=max_tokens,
+            **extra,
         )
         return response.choices[0].message.content or ""
 

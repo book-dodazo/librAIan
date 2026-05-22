@@ -33,6 +33,7 @@ from app.api.routes.chat import router as chat_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.profile import router as profile_router
 from app.api.routes.onboarding import router as onboarding_router
+from app.api.routes.eval import router as eval_router
 from app.db.database import engine, Base
 import app.models.user  # noqa: F401 — 테이블 생성을 위해 import
 
@@ -42,6 +43,14 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# ── 키 로드 확인 ──────────────────────────────────────────────
+_log = logging.getLogger("app.startup")
+_key = settings.CLOVA_API_KEY
+if _key:
+    _log.info("CLOVA_API_KEY 로드됨: %s...%s (len=%d)", _key[:6], _key[-4:], len(_key))
+else:
+    _log.error("CLOVA_API_KEY 비어 있음 — .env 파일 위치·내용 확인 필요")
 
 # ── FastAPI 앱 생성 ───────────────────────────────────────────
 app = FastAPI(
@@ -75,6 +84,7 @@ app.include_router(chat_router)
 app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(onboarding_router)
+app.include_router(eval_router)
 
 # ── 템플릿 설정 ───────────────────────────────────────────────
 templates = Jinja2Templates(directory="app/templates")
