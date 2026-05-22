@@ -151,22 +151,15 @@ async def generate_question(
     if len(slots_to_ask) == 1 and slots_to_ask[0] == "comparison_basis":
         return _generate_comparison_basis_question(current_slots)
 
-    # ── predefined 선택지 슬롯: question은 HCX-007 값 우선, choices는 코드 ──
+    # ── predefined 선택지 슬롯: choices는 코드, question은 템플릿 사용 ──
+    # purpose / reading_level 은 context.llm_question을 절대 재사용하지 않음.
+    # llm_question은 이전 턴(topic_subject 등)에서 만든 문장이 남아 있을 수 있어서
+    # 엉뚱한 질문 텍스트 + 올바른 선택지 조합이 표시되는 버그가 발생함.
     if len(slots_to_ask) == 1 and slots_to_ask[0] in ("purpose", "reading_level"):
         slot_name = slots_to_ask[0]
         predefined = _get_predefined_choices(slot_name, current_slots)
-        # HCX-007이 미리 생성한 질문 문장 우선 사용, 없으면 템플릿 폴백
-        question_text = (
-            context.llm_question
-            if context.llm_question
-            else _make_template_question(slot_name, current_slots)
-        )
-        logger.info(
-            "predefined 질문 (%s): %s [source=%s]",
-            slot_name,
-            question_text,
-            "llm" if context.llm_question else "template",
-        )
+        question_text = _make_template_question(slot_name, current_slots)
+        logger.info("predefined 질문 (%s): %s [source=template]", slot_name, question_text)
         return SessionQuestion(question_text, predefined, [slot_name])
 
     # ── topic_subject / 복수 슬롯: HCX-007 사전 생성값 우선 사용 ──
