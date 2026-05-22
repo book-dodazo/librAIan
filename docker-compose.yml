@@ -21,6 +21,7 @@ services:
       DB_PORT: "5432"
       DB_NAME: book_db
       DB_USER: ${DB_USER}
+      USE_POSTGRES: "true"
       AWS_PUBLIC_IP: "54.175.156.56"
       APP_ENV: production
       LOG_LEVEL: INFO

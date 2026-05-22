@@ -9,7 +9,12 @@ from pathlib import Path
 from app.core.config import settings
 from dotenv import load_dotenv
 import json
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+    _SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SentenceTransformer = None  # type: ignore
+    _SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 # 함수 사용법
 # full_bm25(result)
@@ -91,6 +96,11 @@ def get_clova_embedding(text, max_retries=10, timeout=30):
 _embedding_models = {}
 
 def load_embedding_model(model_name):
+    if not _SENTENCE_TRANSFORMERS_AVAILABLE:
+        raise ImportError(
+            "sentence_transformers 패키지가 설치되지 않았습니다. "
+            "pip install sentence-transformers 로 설치하세요."
+        )
     if model_name not in _embedding_models:
         if model_name == "bge_m3_ko":
             _embedding_models[model_name] = SentenceTransformer("BAAI/bge-m3")
