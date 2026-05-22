@@ -60,7 +60,7 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
         for row in rows:
             result[row[0]] = {
                 "cover_url"  : row[1] or "",
-                "book_intro" : (row[2] or "")[:500],  # 프롬프트 길이 제한
+                "book_intro" : (row[2] or "")[:800],  # 프롬프트 길이 제한
             }
     except Exception as e:
         logger.error("책 상세 정보 조회 실패: %s", e)
@@ -170,8 +170,8 @@ async def _generate_reason(
         raw = await chat_complete(
             system_prompt = prompt,
             messages      = [{"role": "user", "content": "이 도서의 맞춤 추천 이유를 작성해주세요."}],
-            temperature   = 0.5,
-            max_tokens    = 300,
+            temperature   = 0.6,
+            max_tokens    = 500,
         )
 
         # <reason>...</reason> 태그에서 추출
