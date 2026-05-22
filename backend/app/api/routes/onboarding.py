@@ -13,7 +13,7 @@ from app.db.database import get_db
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 logger = logging.getLogger(__name__)
 
-_CATEGORY_PATH = Path(__file__).parents[3] / "modules/llm/category_tree.json"
+_CATEGORY_PATH = Path(__file__).parents[2] / "modules/llm/category_tree.json"
 
 _EXCLUDED_CATS = {
     "어린이(초등)", "유아(0~7세)", "취업/수험서", "중/고등참고서",
@@ -60,9 +60,10 @@ def search_libraries(q: str = Query(..., min_length=1)):
         )
         resp.raise_for_status()
         data = resp.json()
-        libs = data.get("response", {}).get("libs", {}).get("lib", [])
-        if isinstance(libs, dict):
-            libs = [libs]
+        libs_raw = data.get("response", {}).get("libs", [])
+        if isinstance(libs_raw, dict):
+            libs_raw = [libs_raw]
+        libs = [item["lib"] for item in libs_raw if isinstance(item, dict) and "lib" in item]
         return [
             {"name": lib.get("libName", ""), "address": lib.get("address", "")}
             for lib in libs
