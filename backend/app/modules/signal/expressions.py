@@ -298,8 +298,9 @@ CAT8_REFERENCE = {
 
 # ── 카테고리 9: 부정/회피 신호 ───────────────────────────────
 # 특정 분위기/내용을 피하고 싶다는 표현
-# → avoid_mood 슬롯 활성화 (미구현, 향후 추가)
-# → 현재는 감지만 하고 importance 계산에서 참고용으로 사용
+# → avoid_mood 슬롯 활성화
+# → detector.py에서 CAT9 감지 시 importance 계산에 반영
+# → filler.py에서 LLM이 avoid_mood 슬롯으로 추출
 
 CAT9_AVOID = {
     "verb_stems": {

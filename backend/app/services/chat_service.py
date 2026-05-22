@@ -13,6 +13,13 @@
 #   v0.7 - 온보딩 데이터 로드 추가
 #          _restore_or_create_context에서 user_metadata.json 로드
 #          SessionContext.onboarding에 저장
+#   v0.8 - 개인화 체크인 턴 추가
+#          _needs_personalization_turn(): 대분류 요청 + 프로파일 있을 때 mood 질문 발동
+#          generate_personalization_question(): mood 체크인용 경량 질문 생성
+#        - profile 기반 RAG override 추가
+#          _profile_covers_request(): topic/mood/anchor null + recent_liked_books 2권 이상
+#          → rag_ready_from_llm=True override (LLM 판단 우선순위 낮춤)
+#        - SessionLogger 통합: 세션별 추론 흐름 로깅 (session_logger.py)
 # ============================================================
 """
 ChatService: slot 기반 파이프라인 오케스트레이션

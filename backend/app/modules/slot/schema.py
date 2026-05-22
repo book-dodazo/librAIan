@@ -10,6 +10,13 @@
 #          ComparisonDimension, ComparisonBasisSlot 추가 (예외 slot)
 #          arousal-valence 2차원 + KOTE 43 감정 분류 참고
 #          SlotState에 두 슬롯 통합
+#   v0.3 - LocationSlot, AvoidMoodSlot, LengthSlot, LengthLevel 추가
+#          SlotState.get_filled_slots(): 신규 슬롯 포함
+#          SessionContext: LLM holistic judgment 결과 필드 추가
+#            (rag_ready_from_llm, llm_confidence, llm_slots_to_ask,
+#             llm_question, llm_choices, slot_revision_hints, llm_reasoning,
+#             llm_reasoning_raw, personalization_turn_done)
+#          SessionContext: onboarding 필드 추가 (온보딩 데이터 저장)
 # ============================================================
 """
 Slot 스키마 정의
@@ -20,22 +27,31 @@ Slot 스키마 정의
     source : direct/inferred/ambiguous/null — 슬롯 값의 추출 근거 등급
 
 현재 구현된 슬롯 구조:
-    핵심 slot      : topic, purpose, reading_level
-                     항상 활성. 비어있으면 세션 질문 또는 온보딩 fallback.
-    조건부 slot    : mood
-                     카테고리 1 (정서/상태) 신호 감지 시 활성화.
-                     자유 발화에서 LLM이 추출. 세션 질문으로 직접 묻지 않음.
-    예외 slot      : comparison_basis
-                     anchor + 유사도 표현 동시 감지 시에만 활성화.
-                     비교 기준이 드러나지 않으면 세션 질문으로 채움.
+    핵심 slot      : topic
+                     항상 필요. 비어있으면 반드시 세션 질문.
+    준핵심 slot    : purpose, reading_level
+                     대부분의 경우 필요하나 카테고리·맥락에 따라 스킵.
+                     purpose      : _SKIP_PURPOSE_COARSE에 해당하는 카테고리(소설/에세이/여행/요리 등)는 생략.
+                                    목적이 자명하여 질문해도 추천 결과가 바뀌지 않는 경우.
+                     reading_level: get_empty_core_slots()에서 제외.
+                                    기술/학습 계열 topic에서만 조건부 질문.
+                                    inferred이면 재질문 안 함. 온보딩 직접 fallback 없음.
+    조건부 slot    : mood, location, avoid_mood
+                     카테고리 신호 감지 시 활성화.
+                     mood     : 정서/상태(CAT1) 신호 감지 시 — 주로 LLM 추출.
+                                예외: 대분류 요청 + 프로파일 있을 때 개인화 체크인 턴에서 질문.
+                     location : availability(CAT6) 또는 location(CAT7) 신호 감지 시.
+                     avoid_mood: 부정/회피(CAT9) 신호 감지 시.
+    예외 slot      : comparison_basis, length
+                     comparison_basis: anchor + 유사도 표현 동시 감지 시에만 활성화.
+                     length: "짧은", "가볍게" 등 분량 단서 직접 있거나 refinement 요청 시.
     제약 slot      : constraints 리스트
                      page_range, pub_year, availability, author 등 개별 항목.
     플래그         : availability_required (도서관 API 처리용)
     파싱 결과      : anchor (slot 아님, 세션 질문 대상 아님)
 
 미구현 슬롯 (설계 기준서에 정의돼 있으나 현재 코드에 없음):
-    format, location, avoid_mood, length
-    → 향후 확장 시 이 파일에 추가
+    format → topic 안에서 LLM 추출로 처리 결정 (별도 slot 불필요 판단)
 
 MoodSlot 설계 근거:
     arousal-valence 2차원 모델 (Korean Emotion Lexicon, 한국심리학회 기반 868개 감정 단어)
@@ -232,7 +248,9 @@ class MoodSlot(BaseModel):
 
     활성화 조건:
         카테고리 1 (정서/상태) 신호가 자유 발화에서 감지될 때.
-        세션 질문으로 직접 묻지 않음 — LLM 추출 전용.
+        주로 LLM이 자유 발화에서 추출.
+        예외: 대분류 요청 + 온보딩 프로파일 있을 때, 개인화 체크인 턴에서 선택지로 직접 묻기도 함.
+              (chat_service._needs_personalization_turn → generate_personalization_question)
 
     필드:
         categories : MoodCategory 목록 — 복합 감정 지원 ("불안하고 우울한" → 2개)
@@ -526,17 +544,24 @@ class SlotState(BaseModel):
     LLM 추출 → session question 응답 → Refinement 순으로 업데이트됨.
 
     슬롯 유형:
-        핵심 slot      : topic, purpose, reading_level
-                         항상 활성. 비어있으면 세션 질문 또는 온보딩 fallback.
-        조건부 slot    : mood, comparison_basis, location, avoid_mood
-                         특정 신호 감지 시만 활성화.
-        예외 slot      : length
-                         분량 단서 직접 있거나 refinement 요청 시 활성화.
+        핵심 slot      : topic
+                         항상 필요. 비어있으면 반드시 세션 질문.
+        준핵심 slot    : purpose, reading_level
+                         대부분의 경우 필요하나 카테고리·맥락에 따라 스킵.
+                         purpose      : _SKIP_PURPOSE_COARSE에 해당하는 카테고리는 생략
+                         reading_level: get_empty_core_slots() 제외.
+                                        기술/학습 계열에서만 조건부 질문.
+                                        inferred이면 재질문 안 함.
+        조건부 slot    : mood, location, avoid_mood
+                         mood      : 정서/상태(CAT1) 신호 감지 시 — 주로 LLM 추출.
+                                     예외: 개인화 체크인 턴에서 세션 질문 가능.
+                         location  : availability(CAT6) 또는 location(CAT7) 신호 감지 시
+                         avoid_mood: 부정/회피(CAT9) 신호 감지 시
+        예외 slot      : comparison_basis, length
+                         comparison_basis: anchor + 유사도 표현 동시 감지 시에만 활성화
+                         length          : 분량 단서("짧은", "가볍게") 있거나 refinement 시
         제약 slot      : constraints 리스트
         플래그         : availability_required
-
-    미구현 슬롯 (설계 기준서에 정의돼 있으나 현재 코드에 없음):
-        format → topic 안에서 LLM 추출로 처리 결정
     """
     # 핵심 slot
     topic        : TopicSlot   = Field(default_factory=TopicSlot)
@@ -580,8 +605,15 @@ class SlotState(BaseModel):
         return filled
 
     def get_empty_core_slots(self) -> list[str]:
-        """비어있는 핵심 slot 이름 목록 반환 (mood, comparison_basis는 조건부라 제외)
-        reading_level은 여기서 제외 — LLM이 needs_reading_level_clarification 플래그로 필요 여부 판단
+        """
+        rule-based fallback에서 참조하는 비어있는 슬롯 목록 반환.
+
+        반환 대상: topic, purpose만 포함
+            - topic       : 항상 필요한 진짜 핵심 → 포함
+            - purpose     : 대부분 필요 → 포함 (filler에서 _SKIP_PURPOSE_COARSE로 추가 필터링)
+            - reading_level: 기술/학습 계열에서만 조건부 질문 →
+                             filler.py Rule [2]에서 직접 처리하므로 여기서는 제외
+            - mood/comparison_basis 등: 조건부 slot → 제외
         """
         empty = []
         if not self.topic.is_filled():
@@ -654,8 +686,12 @@ class SessionContext(BaseModel):
     rag_ready_from_llm  : bool            = False
 
     # LLM이 제안한 다음 질문 슬롯 목록
-    # 가능한 값: "topic_subject", "purpose_detail", "reading_level",
+    # 가능한 값: "topic_subject", "purpose", "reading_level",
     #            "comparison_basis", "location"
+    # filler.py에서 파생 플래그로 매핑:
+    #   "topic_subject"  → needs_subject_clarification
+    #   "purpose"        → needs_purpose_clarification
+    #   "reading_level"  → needs_reading_level_clarification
     llm_slots_to_ask    : list[str]       = Field(default_factory=list)
 
     # 이미 채워진 슬롯 중 수정/보완이 필요한 것
