@@ -6,6 +6,8 @@
 #   v0.1 - 최초 작성
 #          카테고리 1~9 Kiwi 형태소 분석 기반 신호 감지
 #          importance/uncertainty 계산 + 카테고리 교차 규칙 적용
+#   v0.2 - [FIX] CAT8 레퍼런스 신호: "처럼"/"만큼"은 Kiwi에서 JX(보조사)로 분리되어
+#          NNG 매칭 불가 → _COMPARISON_SUFFIX_PATTERN 정규식으로 별도 감지 추가
 # ============================================================
 """
 Signal Detector: 쿼리에서 신호를 감지하고 슬롯별 importance/uncertainty를 계산

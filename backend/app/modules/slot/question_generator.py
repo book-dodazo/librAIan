@@ -1,8 +1,49 @@
 # -*- coding: utf-8 -*-
-"""Session question generation.
+# ============================================================
+# app/modules/slot/question_generator.py
+#
+# 변경 이력:
+#   v0.1 - 최초 작성
+#          slot 목록 기반 세션 질문 생성 (LLM + predefined 선택지)
+#          SessionQuestion 데이터 클래스, apply_choice 처리
+#   v0.2 - HCX-007 사전 생성 질문/선택지 우선 사용 구조로 변경
+#          generate_question: 4단계 우선순위 처리 (location→predefined→HCX007→fallback)
+#          purpose/reading_level: predefined 선택지 + HCX-007 질문 문장 결합
+#          topic_subject: HCX-007 사전 생성값 우선, 없으면 별도 LLM 호출
+#          _sanitize_choices: LLM이 slots 키 생략한 선택지 자동 복구
+#          generate_personalization_question: 개인화 체크인용 mood 질문 추가
+#          apply_choice: mood 버튼 선택 처리 추가
+# ============================================================
+"""
+세션 질문 생성 모듈
 
-This module keeps orchestration and slot application logic only. LLM prompt text
-and prompt message construction live under app.prompts.*.
+역할:
+    get_slots_to_ask()가 반환한 슬롯 목록을 보고
+    사용자에게 보여줄 SessionQuestion (질문 문장 + 선택지)을 생성합니다.
+
+처리 우선순위:
+    1. location / comparison_basis
+       → 항상 코드 기반 (온보딩·anchor 데이터 필요 — LLM 불필요)
+    2. purpose / reading_level
+       → HCX-007이 충분도 판단 시 미리 생성한 질문 문장 우선 사용
+          + 코드 기반 predefined 선택지 결합
+    3. topic_subject / 복수 슬롯
+       → HCX-007 사전 생성값(llm_question + llm_choices) 우선 사용.
+          없으면 별도 LLM 호출(fallback)
+
+SelectionQuestion 구조:
+    question : 사용자에게 보여줄 질문 문장
+    choices  : [{"label": "...", "slots": {"slot_name": "value"}}, ...]
+               버튼 선택 시 apply_choice()로 슬롯에 반영
+    slots    : 이 질문이 채우려는 슬롯 목록 (pending_slots로 프론트에 전달)
+
+apply_choice():
+    선택지의 slots 딕셔너리를 파싱해 SessionContext에 반영.
+    특수 슬롯 처리:
+        topic_fine         : fine → coarse 역방향 매핑 후 TopicSlot 채움
+        comparison_basis_dim: ComparisonDimension Enum으로 변환
+        location_region / location_library: LocationSlot 채움
+        mood               : MoodCategory Enum으로 변환
 """
 import logging
 from typing import Any, Optional

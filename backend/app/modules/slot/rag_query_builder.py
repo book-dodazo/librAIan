@@ -17,6 +17,11 @@
 #          _fallback_keywords에 avoid_mood, length 추가
 #          _apply_refinement 전면 수정
 #          reading_level / length / availability / avoid_mood / author 변경 모두 반영
+#   v0.7 - 복수 anchor 지원: anchor(단수) → anchors(리스트)로 변경
+#          _anchors_to_list(): topic null + profile override 시
+#          recent_liked_books를 anchor(book_title)로 자동 추가
+#          slot_revision_hints 필드 추가: Reranker에 슬롯 보완 힌트 전달
+#          _profile_covers_request 연동으로 topic null 시 profile 기반 RAG 지원
 # ============================================================
 """
 RAG 쿼리 빌더
@@ -427,7 +432,7 @@ def _build_session_signals(context: SessionContext) -> dict:
         }
         # 제외 항목 (중복 이유):
         #   topic     → score_boost["cate_depth2"] 와 동일
-        #   anchor    → top-level rag_query["anchor"] 와 동일
+        #   anchor    → top-level rag_query["anchors"] 와 동일 (복수형 리스트)
         #   disliked  → constraints["author_non"] / filters["custom_constraints"] 와 동일
     """
     slots   = context.slots
