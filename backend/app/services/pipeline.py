@@ -166,6 +166,8 @@ def run_bm25_search(
     모듈이 없으면 빈 리스트 반환 (graceful skip).
     """
     try:
+        logger.info("BM25 검색 시작 — keyword_query=%s filters=%s",
+                    rag_query.get("keyword_query"), rag_query.get("filters"))
         results = full_bm25(
             result                   = rag_query
         )
