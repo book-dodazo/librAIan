@@ -665,9 +665,21 @@ class SessionContext(BaseModel):
     # LLM 판단 근거 (디버깅/로깅용)
     llm_reasoning       : Optional[str]   = None
 
+    # 터미널에 찍히는 충분도 판단 원문 전체 (eval 로그용)
+    # 형식: "충분도 판단: rag_ready=... confidence=... slots_to_ask=... revisions=... | <reasoning>"
+    llm_reasoning_raw   : Optional[str]   = None
+
     # LLM 충분도 판단 신뢰도 (0~100)
     # confidence < 70 + rag_ready=true → filler.py에서 false로 override
     llm_confidence      : int             = 100
+
+    # ── HCX-007이 충분도 판단과 동시에 생성한 질문/선택지 ────
+    # slots_to_ask가 있을 때 같은 HCX-007 호출에서 함께 반환됨.
+    # question_generator.py가 이 값을 우선 사용하고,
+    # 없거나 predefined 선택지가 필요한 슬롯(purpose/reading_level 등)이면
+    # 코드 기반 선택지를 합쳐서 반환함.
+    llm_question : Optional[str]   = None
+    llm_choices  : list            = Field(default_factory=list)
 
     # ── 하위 호환 플래그 (llm_slots_to_ask에서 자동 파생) ─────
     needs_subject_clarification     : bool = False

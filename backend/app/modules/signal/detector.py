@@ -76,6 +76,13 @@ for _word in _COMPOUND_NOUNS:
 # 행정구역 감지용 정규식 (카테고리 7 location 보조)
 _GU_PATTERN = re.compile(r'[가-힣]{2,4}[구군시]')
 
+# [FIX] CAT8 보조 정규식 — "처럼", "만큼"은 JX(보조사)라 Kiwi NNG 매칭 불가
+# 2글자 이상 한글/영문자가 선행하는 경우만 감지 (단독 "처럼/만큼" 제외)
+_COMPARISON_SUFFIX_PATTERN = re.compile(
+    r'[가-힣a-zA-Z0-9]{2,}(?:처럼|만큼)',
+    re.UNICODE,
+)
+
 
 # ── 수치 정의 ─────────────────────────────────────────────────
 
@@ -239,7 +246,13 @@ def _detect_categories(features: _Features, query: str) -> DetectedCategories:
     cats.cat5_leisure   = _match(features, CAT5_LEISURE)
     cats.cat5_topic     = _match(features, CAT5_TOPIC)
     cats.cat6_avail     = _match(features, CAT6_AVAIL)
-    cats.cat8_reference = _match(features, CAT8_REFERENCE)
+    # [FIX] CAT8: Kiwi 기반 매칭 + "처럼"/"만큼" 정규식 보완
+    # "처럼"/"만큼"은 JX(보조사)라 _match()의 NNG 매칭에 걸리지 않음
+    # → _COMPARISON_SUFFIX_PATTERN 정규식으로 별도 감지
+    cats.cat8_reference = (
+        _match(features, CAT8_REFERENCE)
+        or bool(_COMPARISON_SUFFIX_PATTERN.search(query))
+    )
     cats.cat9_avoid     = _match(features, CAT9_AVOID)
 
     # 카테고리 7: 명사 매칭 + 행정구역 정규식

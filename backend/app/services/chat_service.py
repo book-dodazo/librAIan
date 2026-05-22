@@ -305,6 +305,13 @@ class ChatService:
         if not question:
             return self._error_response(context, "질문 생성 실패")
 
+        logger.info(
+            "생성된 질문: %s | slots_to_ask=%s | 선택지=%s",
+            question.question,
+            slots_to_ask,
+            [c.get("label") for c in (question.choices or [])],
+        )
+
         return SlotChatResponse(
             needs_clarification    = True,
             ready_for_rag          = False,
@@ -484,7 +491,8 @@ def _describe_slots(context: SessionContext) -> str:
         parts.append(', '.join(slots.topic.coarse))
 
     if slots.purpose.is_filled():
-        parts.append(str(slots.purpose.value))
+        _pv = slots.purpose.value
+        parts.append(_pv.value if hasattr(_pv, 'value') else str(_pv))
 
     if slots.reading_level.is_filled():
         from app.modules.slot.rag_query_builder import _LEVEL_LABEL

@@ -33,7 +33,7 @@ def get_categories():
 def search_books(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     try:
         rows = db.execute(
-            text("SELECT DISTINCT title, author FROM books WHERE title ILIKE :q ORDER BY title LIMIT 10"),
+            text("SELECT DISTINCT title, author FROM books WHERE LOWER(title) LIKE LOWER(:q) ORDER BY title LIMIT 10"),
             {"q": f"%{q.strip()}%"},
         ).fetchall()
         return [{"title": r.title, "author": r.author} for r in rows]

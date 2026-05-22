@@ -56,11 +56,24 @@ def _build_fine_to_coarse(tree: dict) -> dict[str, str]:
     예)
         입력: {"소설": ["한국소설", "영미소설", ...], ...}
         출력: {"한국소설": "소설", "영미소설": "소설", ...}
+
+    [FIX] "대학교재" 등 fine/coarse 동명 충돌 방지:
+        category_tree에서 "대학교재"는 대분류이면서 동시에
+        "예술/대중문화", "정치/사회" 등 여러 대분류의 중분류로도 등록되어 있음.
+        fine → coarse 역방향 매핑 시 마지막으로 처리된 대분류로 덮어쓰여
+        완전히 엉뚱한 coarse가 반환되는 버그가 발생함.
+        → 대분류 이름과 동일한 중분류는 역방향 매핑에서 제외.
     """
+    coarse_names = set(tree.keys())  # 대분류 이름 집합 (충돌 감지용)
     mapping = {}
     for coarse, fines in tree.items():
         for fine in fines:
-            mapping[fine] = coarse
+            # 대분류 이름과 동일한 중분류는 건너뜀 (예: "대학교재")
+            # 이런 값이 fine으로 들어왔을 때는 _COARSE_ALIASES에서 직접 처리
+            if fine in coarse_names:
+                continue
+            if fine not in mapping:  # 첫 번째 대분류 매핑을 유지 (더 안정적)
+                mapping[fine] = coarse
     return mapping
 
 
@@ -68,6 +81,82 @@ def _build_fine_to_coarse(tree: dict) -> dict[str, str]:
 _TREE: dict = _load_category_tree()
 _FINE_TO_COARSE: dict[str, str] = _build_fine_to_coarse(_TREE)
 COARSE_CATEGORIES: list[str] = list(_TREE.keys())  # 대분류 목록 (LLM 폴백용)
+
+# ── Coarse 별칭 매핑 ───────────────────────────────────────────
+# LLM이 topic.fine으로 대분류 수준 용어를 반환했을 때 직접 coarse로 변환.
+#
+# 필요 이유:
+#   사용자가 "에세이 추천해줘"라고 하면 LLM이 fine=["에세이"]를 추출하지만,
+#   category_tree에서 "에세이"는 중분류(fine)가 아닌 대분류("시/에세이")에 해당하는 용어.
+#   _FINE_TO_COARSE 역방향 매핑에 없으므로 coarse=[] 로 결과가 나와 RAG 필터가 비어버림.
+#
+# [FIX] fine 값이 이 테이블에 있으면 coarse를 직접 반환 (단계 0으로 실행).
+# category_tree.json 상 대분류명과 일치하는 별칭만 등록.
+_COARSE_ALIASES: dict[str, str] = {
+    # 시/에세이 계열
+    "에세이"       : "시/에세이",
+    "수필"         : "시/에세이",
+    "시"           : "시/에세이",
+    "시집"         : "시/에세이",
+    # 소설 계열 ("소설"은 category_tree의 coarse이기도 함)
+    "소설"         : "소설",
+    "문학"         : "소설",
+    "픽션"         : "소설",
+    # 인문 계열 (fine에 없는 대분류 수준 용어만 등록)
+    # "심리학"은 category_tree fine("인문" 하위)에 실제 있으므로 제외
+    # "철학"도 category_tree fine("인문" 하위)에 실제 있으므로 제외
+    "인문"         : "인문",
+    "인문학"       : "인문",
+    "심리"         : "인문",     # "심리학"과 달리 단독 "심리"는 fine에 없음
+    # 역사/문화 계열 (fine에 없는 용어만)
+    # "한국사", "세계사"는 category_tree fine에 실제 있으므로 제외
+    "역사"         : "역사/문화",  # category_tree: "인문/사회" fine에 있지만 "역사/문화" 대분류 매핑 우선
+    "문화"         : "역사/문화",
+    # 경제/경영 계열
+    "경제"         : "경제/경영",
+    "경영"         : "경제/경영",
+    "비즈니스"     : "경제/경영",
+    # 자기계발 계열
+    "자기계발"     : "자기계발",
+    # 과학 계열
+    "과학"         : "과학",
+    "과학기술"     : "과학",
+    # 컴퓨터/IT 계열
+    "IT"           : "컴퓨터/IT",
+    "컴퓨터"       : "컴퓨터/IT",
+    "프로그래밍"   : "컴퓨터/IT",
+    "개발"         : "컴퓨터/IT",
+    # 정치/사회 계열
+    "사회"         : "정치/사회",
+    "정치"         : "정치/사회",
+    # 건강 계열
+    "건강"         : "건강",
+    "의학"         : "건강",
+    # 예술/대중문화 계열
+    "예술"         : "예술/대중문화",
+    "미술"         : "예술/대중문화",
+    "음악"         : "예술/대중문화",
+    "영화"         : "예술/대중문화",
+    # 취미/실용/스포츠 계열
+    "취미"         : "취미/실용/스포츠",
+    "실용"         : "취미/실용/스포츠",
+    "스포츠"       : "취미/실용/스포츠",
+    # 대학교재 (fine/coarse 동명 충돌 해결 — _build_fine_to_coarse에서 제외됨)
+    "대학교재"     : "대학교재",
+    # 만화/여행/요리/가정
+    "만화"         : "만화",
+    # "종교"는 category_tree "인문/사회" fine에 있으므로 제외 (혼동 방지)
+    "여행"         : "여행",
+    "요리"         : "요리",
+    "육아"         : "가정/육아",
+    "가정"         : "가정/육아",
+    # 외국어 (fine에 없는 대분류 수준 용어만)
+    "외국어"       : "외국어",
+    # "영어"는 "영어문법/독해/작문" 등의 fine이 있어 부분매칭으로 처리됨 — 제외
+    # 어린이/청소년
+    "어린이"       : "어린이(초등)",
+    "청소년"       : "청소년",
+}
 
 
 def _normalize(s: str) -> str:
@@ -131,10 +220,18 @@ def get_coarse_category(fine: str) -> Optional[str]:
         get_coarse_category("한국소설")  → "소설"
         get_coarse_category("현대 소설") → "소설"  (공백 정규화)
         get_coarse_category("심리학")    → "인문"
+        get_coarse_category("에세이")    → "시/에세이"  (coarse alias)
         get_coarse_category("SF")        → None  (매핑 없음)
     """
     if not fine:
         return None
+
+    # 0. Coarse 별칭 직접 매핑 (LLM이 대분류 수준 용어를 fine으로 반환한 경우)
+    #    "에세이" → "시/에세이", "소설" → "소설" 등
+    if fine in _COARSE_ALIASES:
+        coarse = _COARSE_ALIASES[fine]
+        logger.debug("coarse 별칭 매핑: %s → %s", fine, coarse)
+        return coarse
 
     # 1. 정확한 매핑 시도
     if fine in _FINE_TO_COARSE:
@@ -170,9 +267,14 @@ def get_canonical_fine(free_form: str) -> Optional[str]:
     2. 부분 매칭: 트리 키가 입력값으로 시작하거나, 입력값이 트리 키로 시작하는 경우
     3. 실패 → None (자유형 그대로 유지)
 
+    참고: "에세이", "소설" 같은 대분류 수준 용어는 _FINE_TO_COARSE에 없으므로
+    자동으로 None이 반환됨. get_coarse_category()가 _COARSE_ALIASES로 별도 처리함.
+
     예)
         get_canonical_fine("한국소설") → "한국소설"
         get_canonical_fine("한국사")   → "한국사" (정확 매칭)
+        get_canonical_fine("심리학")   → "심리학" (정확 매칭 — category_tree fine)
+        get_canonical_fine("에세이")   → None (fine에 없음)
         get_canonical_fine("SF")       → None (매핑 없음)
         get_canonical_fine("파이썬")   → None (트리에 없음)
     """
