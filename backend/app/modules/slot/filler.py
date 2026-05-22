@@ -46,6 +46,7 @@ from app.core.exceptions import IntentParseError, LLMCallError
 from app.modules.llm.category_mapper import get_canonical_fine, get_coarse_category
 from app.modules.llm.clova_client import chat_complete_json
 from app.modules.signal.detector import SignalResult, detect
+from app.modules.slot.anchor_extractor import extract_anchor_candidate, is_likely_author
 from app.prompts.extraction import (
     SLOT_EXTRACTION_SYSTEM_PROMPT,
     build_slot_extraction_messages,
@@ -112,6 +113,19 @@ async def extract_slots(
         signal_result.needs_llm_fallback,
     )
 
+    # 1-1. 앵커 후보 정규식 pre-extraction
+    # 비교 표현 패턴("처럼", "같은", "스타일의" 등)을 LLM 호출 전에 감지해
+    # 추출 프롬프트에 힌트로 주입 → LLM이 anchor를 "확인"하는 구조로 전환
+    anchor_hint = extract_anchor_candidate(query)
+    if anchor_hint:
+        logger.info(
+            "앵커 후보 pre-extraction: '%s' (%s, conf=%.0f%%) — 패턴='%s'",
+            anchor_hint.text,
+            anchor_hint.anchor_type,
+            anchor_hint.confidence * 100,
+            anchor_hint.pattern,
+        )
+
     # 첫 턴에만 slot_importance/uncertainty를 설정
     # 멀티턴에서는 첫 턴 값을 유지 (쿼리 맥락이 변하지 않으므로)
     if context.turn_count == 0:
@@ -127,13 +141,14 @@ async def extract_slots(
         history       = history,
         current_slots = current_slots,
         signal_result = signal_result,
+        anchor_hint   = anchor_hint,    # 정규식 pre-extraction 결과 주입
     )
 
     try:
         raw = await chat_complete_json(
             system_prompt = SLOT_EXTRACTION_SYSTEM_PROMPT,
             messages      = messages,
-            temperature   = 0.1,
+            temperature   = 0.0,    # [FIX] 0.1 → 0.0: JSON 일관성 향상
             max_tokens    = 900,
         )
     except (LLMCallError, IntentParseError) as e:
@@ -156,7 +171,8 @@ async def extract_slots(
             system_prompt = SUFFICIENCY_JUDGMENT_PROMPT,
             messages      = suf_messages,
             temperature   = 0.1,
-            max_tokens    = 300,
+            max_tokens    = None,   # HCX-007은 max_tokens 파라미터 미지원
+            model         = "HCX-007",
         )
         context.rag_ready_from_llm  = bool(suf_raw.get("rag_ready", False))
         context.llm_confidence      = int(suf_raw.get("confidence", 100))
@@ -164,7 +180,23 @@ async def extract_slots(
         context.slot_revision_hints = dict(suf_raw.get("slot_revisions") or {})
         context.llm_reasoning       = suf_raw.get("reasoning")
 
-        # confidence < 70 + rag_ready=true → hallucination 가능성, 보수적으로 차단
+        # ── 충분도 판단과 동시에 생성된 질문/선택지 저장 ─────────
+        # question_generator.py가 별도 LLM 호출 없이 이 값을 재사용
+        _q = suf_raw.get("question")
+        context.llm_question = str(_q).strip() if _q else None
+        context.llm_choices  = list(suf_raw.get("choices") or [])
+
+        # ── 절대 규칙 코드 레벨 강제 적용 ────────────────────────
+        # 규칙 1: slots_to_ask 있으면 rag_ready는 반드시 false
+        # (HCX-007이 프롬프트 절대 규칙을 무시하는 경우 방어)
+        if context.rag_ready_from_llm and context.llm_slots_to_ask:
+            logger.info(
+                "절대 규칙 1 강제: slots_to_ask=%s 있으므로 rag_ready=true → false",
+                context.llm_slots_to_ask,
+            )
+            context.rag_ready_from_llm = False
+
+        # 규칙 2: confidence < 70 + rag_ready=true → hallucination 가능성, 보수적으로 차단
         _CONFIDENCE_THRESHOLD = 70
         if context.rag_ready_from_llm and context.llm_confidence < _CONFIDENCE_THRESHOLD:
             logger.info(
@@ -177,6 +209,16 @@ async def extract_slots(
         context.needs_subject_clarification      = "topic_subject"  in context.llm_slots_to_ask
         context.needs_purpose_clarification      = "purpose" in context.llm_slots_to_ask
         context.needs_reading_level_clarification= "reading_level"  in context.llm_slots_to_ask
+
+        # 터미널에 찍히는 원문 문자열 그대로 보존 (eval 로그용)
+        _raw_log = (
+            f"충분도 판단: rag_ready={context.rag_ready_from_llm} "
+            f"confidence={context.llm_confidence} "
+            f"slots_to_ask={context.llm_slots_to_ask} "
+            f"revisions={list(context.slot_revision_hints.keys())} | "
+            f"{context.llm_reasoning or ''}"
+        )
+        context.llm_reasoning_raw = _raw_log
 
         logger.info(
             "충분도 판단: rag_ready=%s confidence=%d slots_to_ask=%s revisions=%s | %s",
@@ -337,7 +379,9 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
     #   {"keywords": ["너무 무거운", "너무 잔인한"], "source": "direct"}
     #   또는 멀티턴 방어: ["너무 무거운"] (list)
     raw_avoid = raw.get("avoid_mood", {}) or {}
-    if isinstance(raw_avoid, list):
+    if isinstance(raw_avoid, str):
+        raw_avoid = {"keywords": [raw_avoid], "source": "direct"}
+    elif isinstance(raw_avoid, list):
         raw_avoid = {"keywords": raw_avoid, "source": "direct"}
     avoid_keywords = _to_list(raw_avoid.get("keywords"))
     avoid_src      = _parse_source(raw_avoid.get("source"))
@@ -418,7 +462,8 @@ def _apply_extraction(context: SessionContext, raw: dict) -> SessionContext:
         constraint = _parse_constraint(rc)
         if constraint:
             # availability는 플래그로 별도 처리
-            if constraint.type == "availability" and constraint.value is True:
+            # LLM이 JSON 불리언 true 대신 문자열 "true" / 정수 1을 반환하는 경우도 허용
+            if constraint.type == "availability" and constraint.value in (True, "true", 1):
                 slots.availability_required = True
                 logger.info("availability_required = True")
             else:
@@ -472,6 +517,7 @@ STILL_BROAD_FINES: frozenset[str] = frozenset({
     # 과학 계열
     "교양과학", "과학이론", "과학문고",
     # 자기계발 계열
+    "자기계발",              # 대분류 수준 — 인간관계/습관/동기부여 등 방향 미정
     "성공/처세", "자기능력계발", "비즈니스능력계발",
     # 건강 계열
     "건강일반", "건강문고",
@@ -624,9 +670,16 @@ def get_slots_to_ask(context: SessionContext) -> list[str]:
     if context.rag_ready_from_llm:
         return []
 
-    # LLM이 명시한 슬롯 목록 우선 사용 (이미 질문한 슬롯 제외)
+    # LLM이 명시한 슬롯 목록 우선 사용 (이미 질문한/채워진 슬롯 제외)
     if context.llm_slots_to_ask:
-        to_ask = [s for s in context.llm_slots_to_ask if s not in asked]
+        # 이미 채워진 concrete 슬롯 집합 (topic_subject는 제외 — topic이 있어도 세부화 필요할 수 있음)
+        _filled = set(context.slots.get_filled_slots())
+        _CONCRETE_SLOTS = {"location", "purpose", "reading_level", "comparison_basis"}
+        to_ask = [
+            s for s in context.llm_slots_to_ask
+            if s not in asked
+            and not (s in _CONCRETE_SLOTS and s in _filled)
+        ]
         if to_ask:
             return to_ask
 
@@ -758,14 +811,21 @@ def is_ready_for_rag(context: SessionContext) -> bool:
 # ── 헬퍼 함수 ─────────────────────────────────────────────────
 
 # "드래곤 라자 같은", "기억 전달자처럼", "무라카미 하루키와 비슷한" 패턴에서 앞부분 추출
+# [FIX] 처럼/만큼/스타일의/수준으로 등 누락 패턴 추가
 _ANCHOR_FROM_CB_PATTERN = re.compile(
-    r'^(.+?)\s*(?:와|과|이랑|랑)?\s*(?:같은|비슷한|유사한|처럼)',
+    r'^(.+?)\s*(?:와|과|이랑|랑)?\s*'
+    r'(?:같은|비슷한|유사한|처럼|만큼|스타일의|스타일로|수준으로|수준의|느낌으로|느낌의|정도로|정도의)',
     re.UNICODE,
 )
 
 
 def _extract_anchor_from_raw(raw: Optional[str]) -> Optional[Anchor]:
-    """comparison_basis.raw에서 anchor(책 제목/작가명)를 역방향으로 추출."""
+    """
+    comparison_basis.raw에서 anchor(책 제목/작가명)를 역방향으로 추출.
+
+    anchor_extractor._is_likely_author()를 재사용해
+    저자명/책 제목 타입을 자동 분류.
+    """
     if not raw:
         return None
     m = _ANCHOR_FROM_CB_PATTERN.match(raw.strip())
@@ -774,7 +834,10 @@ def _extract_anchor_from_raw(raw: Optional[str]) -> Optional[Anchor]:
     candidate = m.group(1).strip()
     if len(candidate) < 2:
         return None
-    return Anchor(value=candidate, type=AnchorType.book_title)
+    # 저자명 여부 판별 — anchor_extractor 휴리스틱 재사용
+    is_author, author_conf = is_likely_author(candidate)
+    anchor_type = AnchorType.author if (is_author and author_conf >= 0.70) else AnchorType.book_title
+    return Anchor(value=candidate, type=anchor_type)
 
 
 def _parse_source(raw: Optional[str]) -> SlotSource:

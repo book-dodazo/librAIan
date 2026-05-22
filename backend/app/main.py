@@ -30,6 +30,12 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.api.routes.chat import router as chat_router
+from app.api.routes.auth import router as auth_router
+from app.api.routes.profile import router as profile_router
+from app.api.routes.onboarding import router as onboarding_router
+from app.api.routes.eval import router as eval_router
+from app.db.database import engine, Base
+import app.models.user  # noqa: F401 — 테이블 생성을 위해 import
 
 # [FIX v0.2] 로깅 설정을 가장 먼저 실행
 logging.basicConfig(
@@ -37,6 +43,14 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# ── 키 로드 확인 ──────────────────────────────────────────────
+_log = logging.getLogger("app.startup")
+_key = settings.CLOVA_API_KEY
+if _key:
+    _log.info("CLOVA_API_KEY 로드됨: %s...%s (len=%d)", _key[:6], _key[-4:], len(_key))
+else:
+    _log.error("CLOVA_API_KEY 비어 있음 — .env 파일 위치·내용 확인 필요")
 
 # ── FastAPI 앱 생성 ───────────────────────────────────────────
 app = FastAPI(
@@ -62,8 +76,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── DB 테이블 생성 ────────────────────────────────────────────
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as _db_err:
+    logging.getLogger(__name__).warning("DB 연결 실패 — 테이블 생성 생략: %s", _db_err)
+
 # ── 라우터 등록 ───────────────────────────────────────────────
 app.include_router(chat_router)
+app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(onboarding_router)
+app.include_router(eval_router)
 
 # ── 템플릿 설정 ───────────────────────────────────────────────
 templates = Jinja2Templates(directory="app/templates")

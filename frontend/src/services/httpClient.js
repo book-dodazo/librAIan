@@ -6,12 +6,22 @@
 // .env.development → 개발용, .env.production → 배포용
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
+function getAuthHeader() {
+  try {
+    const token = JSON.parse(localStorage.getItem('token') ?? 'null');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function request(path, options = {}) {
   const { headers, ...rest } = options;
 
   const response = await fetch(`${BASE_URL}${path}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeader(),
       ...headers,
     },
     ...rest,
@@ -28,4 +38,5 @@ async function request(path, options = {}) {
 export const http = {
   get:  (path)        => request(path, { method: 'GET' }),
   post: (path, body)  => request(path, { method: 'POST', body: JSON.stringify(body) }),
+  put:  (path, body)  => request(path, { method: 'PUT',  body: JSON.stringify(body) }),
 };

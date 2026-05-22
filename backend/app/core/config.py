@@ -36,23 +36,23 @@ class Settings(BaseSettings):
     NARU_API_URL : str = "http://data4library.kr/api"
     NARU_LIB_CODE: str = ""
 
-    APP_ENV: str = "development"
-    LOG_LEVEL: str = "INFO"
-
     # ── Elasticsearch ───────────────────────────────────────
-    ELASTIC_URL: str
-    ELASTIC_USER: str
-    ELASTIC_PASSWORD: str
+    ELASTIC_URL: str = ""
+    ELASTIC_USER: str = ""
+    ELASTIC_PASSWORD: str = ""
 
     # ── PostgreSQL ───────────────────────────────────────
-    DB_HOST: str
-    DB_PORT: str
-    DB_NAME: str
-    DB_USER: str
-    DB_PASSWORD: str
+    DB_HOST: str = ""
+    DB_PORT: str = "5432"
+    DB_NAME: str = ""
+    DB_USER: str = ""
+    DB_PASSWORD: str = ""
 
     # ── AWS ──────────────────────────────────────────────
-    AWS_PUBLIC_IP: str
+    AWS_PUBLIC_IP: str = ""
+
+    # ── JWT ──────────────────────────────────────────────
+    JWT_SECRET: str = "change-this-secret-in-production"
 
     # ── 앱 일반 ──────────────────────────────────────────────
     APP_ENV: str = "development"
