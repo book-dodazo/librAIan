@@ -101,7 +101,7 @@ async def chat_complete(
             model=model or settings.CLOVA_MODEL,
             messages=full_messages,
             temperature=temperature,
-            max_tokens=max_tokens,
+            extra_body={"maxTokens": max_tokens},
         )
         return response.choices[0].message.content or ""
 
