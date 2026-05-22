@@ -31,7 +31,7 @@ URL = "https://clovastudio.stream.ntruss.com/testapp/v1/api-tools/embedding/v2/"
 CLOVA_API_KEY = settings.CLOVA_API_KEY
 
 es = Elasticsearch(
-    "https://localhost:9200",
+    settings.ELASTIC_URL,
     basic_auth=(
         settings.ELASTIC_USER,
         settings.ELASTIC_PASSWORD

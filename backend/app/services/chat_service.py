@@ -227,42 +227,53 @@ class ChatService:
         sl     : Optional["SessionLogger"] = None,
     ) -> SlotChatResponse:
         """
-        RAG 쿼리 생성 후 카드로 반환 (데모 모드)
+        전체 파이프라인 실행 후 검색 결과 반환
 
-        데모: RAG 쿼리만 생성하고 BM25/Reranker는 실행하지 않음.
-             쿼리 내용을 카드로 보여주고 파이프라인 확인용으로 사용.
+        RAG 쿼리 생성 → Anchor rewrite → BM25 검색 → Reranking → 대출 가능 여부 조회
         """
-        from app.services.pipeline import run_rag_query
+        import time
+        from app.services.pipeline import run_full_pipeline
         from app.core.session_logger import PipelineLog
 
-        rag_query = await run_rag_query(context)
-        context.rag_query = rag_query
+        start    = time.time()
+        pipeline = await run_full_pipeline(context)
+        elapsed  = int((time.time() - start) * 1000)
+
+        context.rag_query  = pipeline.rag_query
+        final_results      = pipeline.final_results
 
         filled  = context.slots.get_filled_slots()
-        message = f"좋아요! {_describe_slots(context)} 관련 도서를 검색할게요."
+        message = (
+            f"좋아요! {_describe_slots(context)} 관련 도서 {len(final_results)}권을 찾았어요."
+            if final_results
+            else f"좋아요! {_describe_slots(context)} 관련 도서를 검색했는데 결과가 없어요. 조건을 바꿔서 다시 시도해보세요."
+        )
 
         # ── 세션 로그 기록 ────────────────────────────────────
         if sl:
             sl.log_recommendation(
-                rag_query    = rag_query or {},
-                pipeline_log = PipelineLog(bm25_count=0, reranker_count=0,
-                                           availability_count=0,
-                                           elapsed_ms={"rag_query": 0, "bm25": 0,
-                                                       "reranker": 0, "availability": 0,
-                                                       "total": 0}),
-                result       = None,
+                rag_query    = pipeline.rag_query or {},
+                pipeline_log = PipelineLog(
+                    bm25_count        = len(pipeline.bm25_results),
+                    reranker_count    = len(pipeline.reranked_results),
+                    availability_count= len(pipeline.availability_index),
+                    elapsed_ms        = {"rag_query": 0, "bm25": 0, "reranker": 0,
+                                         "availability": 0, "total": elapsed},
+                ),
+                result = final_results[0] if final_results else None,
             )
-            sl.finalize(slots=context.slots, completed=True, result=None)
+            sl.finalize(slots=context.slots, completed=True,
+                        result=final_results[0] if final_results else None)
 
         return SlotChatResponse(
-            needs_clarification  = False,
-            ready_for_rag        = True,
-            message              = message,
-            rag_query            = rag_query,
-            search_results       = None,
-            availability_index   = None,
-            context              = context.model_dump(),
-            filled_slots         = filled,
+            needs_clarification = False,
+            ready_for_rag       = True,
+            message             = message,
+            rag_query           = pipeline.rag_query,
+            search_results      = final_results if final_results else None,
+            availability_index  = pipeline.availability_index if pipeline.availability_index else None,
+            context             = context.model_dump(),
+            filled_slots        = filled,
         )
 
     def _build_question_response(
