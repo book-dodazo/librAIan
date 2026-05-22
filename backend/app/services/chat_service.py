@@ -227,26 +227,44 @@ class ChatService:
         sl     : Optional["SessionLogger"] = None,
     ) -> SlotChatResponse:
         """
-        전체 파이프라인 실행 후 검색 결과 반환
+        전체 파이프라인 실행 후 검색 결과 카드 반환
 
-        RAG 쿼리 생성 → Anchor rewrite → BM25 검색 → Reranking → 대출 가능 여부 조회
+        RAG 쿼리 생성 → Anchor rewrite → BM25 검색 → Reranking
+        → 대출 가능 여부 조회 → 표지/소개 조회 → 추천 이유 생성
         """
         import time
         from app.services.pipeline import run_full_pipeline
+        from app.modules.response.generator import generate_result_cards
         from app.core.session_logger import PipelineLog
+        from app.db.database import SessionLocal
 
         start    = time.time()
         pipeline = await run_full_pipeline(context)
         elapsed  = int((time.time() - start) * 1000)
 
-        context.rag_query  = pipeline.rag_query
-        final_results      = pipeline.final_results
+        context.rag_query = pipeline.rag_query
+        final_results     = pipeline.final_results
+
+        # ── 결과 카드 생성 (표지/소개 DB 조회 + 추천 이유 LLM 생성) ──
+        result_cards: list[dict] = []
+        if final_results:
+            db = SessionLocal()
+            try:
+                result_cards = await generate_result_cards(
+                    final_results  = final_results,
+                    rag_query      = pipeline.rag_query or {},
+                    original_query = context.original_query or "",
+                    onboarding     = context.onboarding,
+                    db             = db,
+                )
+            finally:
+                db.close()
 
         filled  = context.slots.get_filled_slots()
         message = (
-            f"좋아요! {_describe_slots(context)} 관련 도서 {len(final_results)}권을 찾았어요."
-            if final_results
-            else f"좋아요! {_describe_slots(context)} 관련 도서를 검색했는데 결과가 없어요. 조건을 바꿔서 다시 시도해보세요."
+            f"좋아요! {_describe_slots(context)} 관련 도서 {len(result_cards)}권을 찾았어요."
+            if result_cards
+            else f"죄송해요, {_describe_slots(context)} 관련 도서를 찾지 못했어요. 조건을 바꿔서 다시 시도해보세요."
         )
 
         # ── 세션 로그 기록 ────────────────────────────────────
@@ -260,17 +278,17 @@ class ChatService:
                     elapsed_ms        = {"rag_query": 0, "bm25": 0, "reranker": 0,
                                          "availability": 0, "total": elapsed},
                 ),
-                result = final_results[0] if final_results else None,
+                result = result_cards[0] if result_cards else None,
             )
             sl.finalize(slots=context.slots, completed=True,
-                        result=final_results[0] if final_results else None)
+                        result=result_cards[0] if result_cards else None)
 
         return SlotChatResponse(
             needs_clarification = False,
             ready_for_rag       = True,
             message             = message,
             rag_query           = pipeline.rag_query,
-            search_results      = final_results if final_results else None,
+            search_results      = result_cards if result_cards else None,
             availability_index  = pipeline.availability_index if pipeline.availability_index else None,
             context             = context.model_dump(),
             filled_slots        = filled,
