@@ -12,10 +12,10 @@ DEFAULT_DUMP_PATH = Path(__file__).with_name("dump.sql")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PostgreSQL DB 생성 후 dump.sql을 psql로 복원합니다.")
-    parser.add_argument("--db-name", default=os.getenv("POSTGRES_DB", "libraian"))
-    parser.add_argument("--user", default=os.getenv("POSTGRES_USER", os.getenv("USER", "")))
-    parser.add_argument("--host", default=os.getenv("POSTGRES_HOST", "localhost"))
-    parser.add_argument("--port", default=os.getenv("POSTGRES_PORT", "5432"))
+    parser.add_argument("--db-name", default=os.getenv("DB_NAME", "libraian"))
+    parser.add_argument("--user", default=os.getenv("DB_USER", os.getenv("USER", "")))
+    parser.add_argument("--host", default=os.getenv("DB_HOST", "localhost"))
+    parser.add_argument("--port", default=os.getenv("DB_PORT", "5432"))
     parser.add_argument("--dump-path", type=Path, default=DEFAULT_DUMP_PATH)
     parser.add_argument("--drop", action="store_true", help="기존 DB를 삭제하고 다시 생성")
     return parser.parse_args()
@@ -23,8 +23,8 @@ def parse_args() -> argparse.Namespace:
 
 def command_env() -> dict[str, str]:
     env = os.environ.copy()
-    if os.getenv("POSTGRES_PASSWORD"):
-        env["PGPASSWORD"] = os.environ["POSTGRES_PASSWORD"]
+    if os.getenv("DB_PASSWORD"):
+        env["PGPASSWORD"] = os.environ["DB_PASSWORD"]
     return env
 
 

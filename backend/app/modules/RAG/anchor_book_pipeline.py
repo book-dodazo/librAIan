@@ -296,7 +296,9 @@ keyword_query와 semantic_query를 생성하라.
 - anchor의 줄거리를 그대로 요약하지 말고, 추천 기준이 되는 특징을 추출한다.
 - JSON만 출력한다.
 - 설명 문장, 코드블럭은 출력하지 않는다.
-- anchor에 포함된 책 제목, 작가 이름을 keyword_query와 semantic_query에 직접 포함하지 않는다.
+- anchor에 포함된 책 제목, 작가 이름을 keyword_query와 semantic_query에 직접 포함하지 않는다. 
+- 의미 단위를 훼손하는 부분 제거를 하지 않는다.
+- 복합명사를 부분적으로 잘라내지 않는다.
 - 고유명사(anchor title/author)를 검색어로 재사용하지 말고 일반화된 특징으로 변환한다.
 - 특정 작품명/작가명이 없어도 retrieval 가능한 표현으로 바꾼다.
 

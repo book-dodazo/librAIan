@@ -99,6 +99,24 @@ class SessionQuestion:
         return {"question": self.question, "choices": self.choices, "slots": self.slots}
 
 
+def _sanitize_choices(choices: list) -> list[dict]:
+    """LLM이 slots 키를 생략한 선택지를 자동 복구.
+
+    올바른 형식: {"label": "X", "slots": {"mood": "Y"}}
+    잘못된 형식: {"label": "X", "mood": "Y"}  ← slots 키 없이 평탄 구조
+    """
+    sanitized = []
+    for c in choices:
+        if not isinstance(c, dict):
+            continue
+        if "slots" not in c:
+            # slots 키 없이 나머지 키가 slot명으로 들어온 경우 → 래핑
+            inner = {k: v for k, v in c.items() if k != "label"}
+            c = {"label": c.get("label", ""), "slots": inner}
+        sanitized.append(c)
+    return sanitized
+
+
 def generate_personalization_question() -> SessionQuestion:
     """대분류 요청 시 mood 체크인용 경량 개인화 질문."""
     return SessionQuestion(
@@ -112,18 +130,61 @@ async def generate_question(
     slots_to_ask: list[str],
     context: SessionContext,
 ) -> Optional[SessionQuestion]:
+    """슬롯 목록을 보고 사용자에게 보여줄 SessionQuestion을 반환합니다.
+
+    처리 우선순위:
+      1. location / comparison_basis → 항상 코드 기반 (온보딩·anchor 데이터 필요)
+      2. purpose / reading_level    → HCX-007이 미리 생성한 question 문장 사용
+                                       + 코드 기반 predefined 선택지 결합
+      3. topic_subject / 복수 슬롯  → HCX-007이 미리 생성한 question + choices 사용
+                                       (없으면 별도 LLM 호출로 fallback)
+    """
     if not slots_to_ask:
         return None
 
+    current_slots = _context_to_dict(context)
+
+    # ── 항상 코드 기반 (온보딩·anchor 데이터 필요 — LLM 불필요) ──
     if len(slots_to_ask) == 1 and slots_to_ask[0] == "location":
         return _generate_location_question(context)
 
+    if len(slots_to_ask) == 1 and slots_to_ask[0] == "comparison_basis":
+        return _generate_comparison_basis_question(current_slots)
+
+    # ── predefined 선택지 슬롯: question은 HCX-007 값 우선, choices는 코드 ──
+    if len(slots_to_ask) == 1 and slots_to_ask[0] in ("purpose", "reading_level"):
+        slot_name = slots_to_ask[0]
+        predefined = _get_predefined_choices(slot_name, current_slots)
+        # HCX-007이 미리 생성한 질문 문장 우선 사용, 없으면 템플릿 폴백
+        question_text = (
+            context.llm_question
+            if context.llm_question
+            else _make_template_question(slot_name, current_slots)
+        )
+        logger.info(
+            "predefined 질문 (%s): %s [source=%s]",
+            slot_name,
+            question_text,
+            "llm" if context.llm_question else "template",
+        )
+        return SessionQuestion(question_text, predefined, [slot_name])
+
+    # ── topic_subject / 복수 슬롯: HCX-007 사전 생성값 우선 사용 ──
+    if context.llm_question and context.llm_choices:
+        choices = _sanitize_choices(context.llm_choices)
+        if not choices:
+            choices = [{"label": "잘 모르겠어요", "slots": {}}]
+        logger.info(
+            "HCX-007 사전 생성 질문 사용: %s (선택지 %d개)",
+            context.llm_question,
+            len(choices),
+        )
+        return SessionQuestion(context.llm_question, choices, slots_to_ask)
+
+    # ── fallback: HCX-007 사전 생성값이 없는 경우 별도 LLM 호출 ──
+    logger.info("HCX-007 사전 생성 질문 없음 — fallback LLM 호출: %s", slots_to_ask)
     if len(slots_to_ask) == 1 and slots_to_ask[0] == "topic_subject":
         return await _generate_detail_question(slots_to_ask[0], context)
-
-    current_slots = _context_to_dict(context)
-    if len(slots_to_ask) == 1:
-        return await _generate_single_question(slots_to_ask[0], context.original_query, current_slots)
 
     return await _generate_multi_question(slots_to_ask, context.original_query, current_slots)
 
@@ -143,10 +204,9 @@ async def _generate_single_question(
     if not predefined:
         return await _generate_llm_question([slot_name], original_query, current_slots)
 
-    question_text = await _generate_question_text(slot_name, current_slots, choices=predefined)
-    if not question_text:
-        question_text = _default_question_text(slot_name)
-
+    # reading_level / purpose 같이 선택지가 고정된 슬롯은 LLM 질문 생성 불필요.
+    # LLM이 선택지 단어를 미리 질문에 노출하거나 어색한 문장을 만드는 문제 방지.
+    question_text = _make_template_question(slot_name, current_slots)
     return SessionQuestion(question_text, predefined, [slot_name])
 
 
@@ -235,7 +295,8 @@ async def _generate_topic_question(current_slots: dict) -> SessionQuestion:
             system_prompt=system,
             messages=messages,
             temperature=0.3,
-            max_tokens=150,
+            max_tokens=None,   # HCX-007은 max_tokens 파라미터 미지원
+            model="HCX-007",
         )
         llm_question = raw.get("question") or ""
         if llm_question.endswith("?"):
@@ -265,15 +326,19 @@ async def _generate_detail_question(slot_name: str, context: SessionContext) -> 
             system_prompt=system,
             messages=messages,
             temperature=0.4,
-            max_tokens=300,
+            max_tokens=None,   # HCX-007은 max_tokens 파라미터 미지원
+            model="HCX-007",
         )
         question = raw.get("question") or ""
         if not question.endswith("?"):
             question = fallback_question
-        choices = raw.get("choices") or []
+        choices = _sanitize_choices(raw.get("choices") or [])
     except Exception as e:
         logger.warning("detail question generation failed (%s): %s", slot_name, e)
         question = fallback_question
+        choices = [{"label": "잘 모르겠어요", "slots": {}}]
+
+    if not choices:
         choices = [{"label": "잘 모르겠어요", "slots": {}}]
 
     return SessionQuestion(question, choices, [slot_name])
@@ -324,11 +389,12 @@ async def _generate_llm_question(
             system_prompt=system_msg,
             messages=user_msgs,
             temperature=0.4,
-            max_tokens=400,
+            max_tokens=None,   # HCX-007은 max_tokens 파라미터 미지원
+            model="HCX-007",
         )
         return SessionQuestion(
             raw.get("question", _default_question_text(slots_to_ask[0])),
-            raw.get("choices", []),
+            _sanitize_choices(raw.get("choices") or []),
             slots_to_ask,
         )
     except (LLMCallError, IntentParseError) as e:
@@ -360,6 +426,32 @@ async def _generate_question_text(
         return text if text.endswith("?") else None
     except Exception:
         return None
+
+
+def _make_template_question(slot_name: str, current_slots: dict) -> str:
+    """predefined 선택지용 질문 문장 — LLM 없이 템플릿으로 생성.
+
+    topic 정보가 있으면 주제를 자연스럽게 언급하고,
+    없으면 generic 기본 문장으로 폴백.
+    선택지 단어를 미리 노출하지 않도록 설계됨.
+    """
+    topic = current_slots.get("topic", {})
+    fine  = topic.get("fine", []) if isinstance(topic, dict) else []
+    # 최대 2개, 너무 길면 잘라냄
+    topic_str = ", ".join(fine[:2]) if fine else ""
+
+    if slot_name == "reading_level":
+        if topic_str:
+            return f"{topic_str} 책을 어느 정도 깊이로 보고 싶으세요?"
+        return "어느 정도 깊이의 책을 원하시나요?"
+
+    if slot_name == "purpose":
+        if topic_str:
+            return f"{topic_str} 책을 어떤 목적으로 읽으실 건가요?"
+        return "이번에는 어떤 목적으로 책을 읽으실 건가요?"
+
+    # 그 외 predefined가 생기면 기본 텍스트로
+    return _default_question_text(slot_name)
 
 
 def _default_question_text(slot_name: str) -> str:
