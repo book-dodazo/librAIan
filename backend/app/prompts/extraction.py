@@ -138,13 +138,16 @@ dimensions는 비교 기준 축 목록 (복수 가능).
 
 **중요: comparison_basis를 추출할 때는 반드시 anchor도 함께 추출해야 합니다.**
 비교 대상(책 제목/작가명)이 있으면 comparison_basis와 anchor 두 필드를 동시에 채우세요.
-"같은", "비슷한", "처럼", "수준으로", "만큼", "느낌으로", "정도로" 모두 비교 표현입니다.
+"같은", "비슷한", "처럼", "수준으로", "만큼", "느낌으로", "정도로", "스타일의", "스타일로" 모두 비교 표현입니다.
 예: "드래곤 라자 같은 스타일의 책"
   → comparison_basis: {dimensions: ["style"], raw: "드래곤 라자 같은 스타일"}
   → anchor: {value: "드래곤 라자", type: "book_title"}  ← 반드시 함께
 예: "엔드 오브 타임 수준으로 흥미로운 과학책"
   → comparison_basis: {dimensions: ["depth"], raw: "엔드 오브 타임 수준으로 흥미로운"}
   → anchor: {value: "엔드 오브 타임", type: "book_title"}  ← 반드시 함께
+예: "장하준 스타일의 경영 리더십 책"
+  → comparison_basis: {dimensions: ["style"], raw: "장하준 스타일의"}
+  → anchor: {value: "장하준", type: "author"}  ← 반드시 함께
 
 #### dimensions 가능한 값
   mood        — 분위기, 따뜻함, 어두운 느낌 등
@@ -165,12 +168,26 @@ dimensions는 비교 기준 축 목록 (복수 가능).
 - library   : 도서관명
 
 **비교/참조 표현에서도 anchor를 추출하세요.**
-"같은", "비슷한", "처럼" 외에 "수준으로", "만큼", "정도로", "느낌으로" 뒤에 나오는 책/작가도 anchor입니다.
+"같은", "비슷한", "처럼" 외에 "수준으로", "만큼", "정도로", "느낌으로", "스타일의", "스타일로" 뒤에 나오는 책/작가도 anchor입니다.
+
+**핵심 규칙: 책 제목이나 작가명이 비교 표현 앞에 나오면 반드시 anchor로 추출하세요.**
+
 예:
   "엔드 오브 타임 수준으로 흥미로운 과학책"  → anchor: {value: "엔드 오브 타임", type: "book_title"}
   "코스모스처럼 읽기 쉬운 과학책"            → anchor: {value: "코스모스", type: "book_title"}
   "하루키만큼 감성적인 작가의 책"             → anchor: {value: "무라카미 하루키", type: "author"}
   "총균쇠 느낌으로 역사 교양서"              → anchor: {value: "총균쇠", type: "book_title"}
+  "장하준 스타일의 경영 리더십 책"            → anchor: {value: "장하준", type: "author"}
+  "채식주의자처럼 감성적인 한국소설"          → anchor: {value: "채식주의자", type: "book_title"}
+  "불편한 편의점 같은 따뜻한 소설"            → anchor: {value: "불편한 편의점", type: "book_title"}
+  "소년이 온다 같은 역사 소설"               → anchor: {value: "소년이 온다", type: "book_title"}
+  "아몬드처럼 공감 능력 관련 소설"            → anchor: {value: "아몬드", type: "book_title"}
+  "82년생 김지영 같은 사회적 메시지 소설"     → anchor: {value: "82년생 김지영", type: "book_title"}
+  "김훈 스타일의 역사소설"                   → anchor: {value: "김훈", type: "author"}
+  "박경리처럼 묵직한 대하소설"               → anchor: {value: "박경리", type: "author"}
+
+**주의: anchor 없이 단독으로 사용된 비교 표현은 anchor 추출 금지**
+  "비슷한 분위기 책" (책 제목/작가명 없음) → anchor null
 
 ### constraints (제약 조건) — 있을 때만
 각 제약을 객체로 추출:
@@ -189,20 +206,35 @@ dimensions는 비교 기준 축 목록 (복수 가능).
 - "제외/말고"        → "exclude"
 - 정확히 일치        → "eq"
 
+#### constraints 추출 예시
+- "300페이지 이하로" → {"type":"page_range","operator":"lte","value":300}
+- "2020년 이후에 나온 걸로" → {"type":"pub_year","operator":"gte","value":2020}
+- "2019년 이전 책으로" → {"type":"pub_year","operator":"lte","value":2019}
+- "최근 3년 이내" → {"type":"pub_year","operator":"gte","value":2022}
+- "지금 빌릴 수 있는" → {"type":"availability","value":true}
+- "빌릴 수 있는 책" → {"type":"availability","value":true}
+- "대출 가능한" → {"type":"availability","value":true}
+- "대출 가능 여부 확인해줘" → {"type":"availability","value":true}
+- "도서관에서 빌릴 수 있는" → {"type":"availability","value":true}
+- "지금 당장 빌릴 수 있는" → {"type":"availability","value":true}
+- "김영하 말고" → {"type":"nonauthor","value":"김영하","operator":"exclude"}
+- "번역서 말고", "번역 안 된 책으로" → {"type":"custom","value":"번역서 제외","operator":"exclude","raw":"번역서 말고"}
+  ※ "번역서"는 특정 저자명이 아니므로 nonauthor 대신 custom 사용
+- "한국 작가 책으로", "국내 작가", "국내 저자" → {"type":"custom","value":"한국 작가","operator":"eq","raw":"한국 작가 책으로"}
+  ※ "한국 작가"는 특정 저자명이 아니므로 author 대신 custom 사용
+
 ### avoid_mood (피하고 싶은 분위기) — 있을 때만
 피하고 싶은 분위기/내용이 명시된 경우 추출.
-keywords는 복수 가능.
+반드시 아래 형식으로만 출력하세요 (문자열 단독 출력 금지):
+  {"keywords": ["키워드1", "키워드2"], "source": "direct"}
 
 예:
-  "너무 무거운 건 싫어" → keywords=["너무 무거운"]
-  "잔인하거나 선정적인 건 빼줘" → keywords=["너무 잔인한", "너무 선정적인"]
-
-예:
-  "무서운 건 싫어"           → keywords=["무서운"]
-  "슬픈 결말은 싫어"         → keywords=["슬픈 결말"]
-  "너무 어두운 건"           → keywords=["어두운"]
-  "폭력적인 건 빼줘"         → keywords=["폭력적인"]
-  "감동적이고 눈물 나는 건 별로" → keywords=["눈물 나는", "감동적인"]
+  "너무 무거운 건 싫어" → {"keywords": ["너무 무거운"], "source": "direct"}
+  "잔인하거나 선정적인 건 빼줘" → {"keywords": ["너무 잔인한", "너무 선정적인"], "source": "direct"}
+  "무서운 건 싫어"     → {"keywords": ["무서운"], "source": "direct"}
+  "슬픈 결말은 싫어"   → {"keywords": ["슬픈 결말"], "source": "direct"}
+  "폭력적인 건 빼줘"   → {"keywords": ["폭력적인"], "source": "direct"}
+  "딱딱하거나 이론 많은 건 싫어요" → {"keywords": ["딱딱한", "이론 많은"], "source": "direct"}
 
 #### null_cases (avoid_mood로 추출하지 않는 경우)
 - "위로가 되는 책" → avoid_mood 아님, purpose로 처리
@@ -225,9 +257,11 @@ page_range(constraints)와의 차이:
 - source : direct|null
 
 #### location null_cases
-- "빌릴 수 있는 책"처럼 지역/도서관 없이 대출 가능 여부만 말한 경우
+- "빌릴 수 있는 책", "대출 가능한 책", "빌려볼 수 있는"처럼 지역/도서관 없이 대출 여부만 말한 경우
   → location은 null, constraints에 {"type":"availability","value":true} 추가
+- "도서관에서 빌릴 수 있는" → location null, constraints에 {"type":"availability","value":true}
 - 지역/도서관이 불명확하면 추측하지 말고 null
+- ※ availability와 location은 독립적: location 없이 availability만 올 수 있음
 
 ### is_refinement (이전 추천 수정 요청 여부)
 이전 추천 결과를 수정하는 요청이면 true
@@ -292,8 +326,17 @@ def build_slot_extraction_messages(
     history: list[dict],
     current_slots: dict,
     signal_result=None,
+    anchor_hint=None,       # Optional[AnchorCandidate] — 정규식 pre-extraction 결과
 ) -> list[dict]:
-    """slot 추출용 LLM messages 배열 생성"""
+    """
+    slot 추출용 LLM messages 배열 생성.
+
+    anchor_hint:
+        비교 표현 패턴 정규식으로 추출한 anchor 후보.
+        confidence >= 0.55 이면 LLM 프롬프트에 힌트로 추가.
+        LLM은 후보가 실제 책 제목/저자명이면 anchor로 확정,
+        아니면 무시하도록 지시받음.
+    """
     messages = []
 
     for turn in history[-4:]:
@@ -313,9 +356,26 @@ def build_slot_extraction_messages(
         if hint_lines:
             signal_hint = "[이번 쿼리에서 중요하게 봐야 할 슬롯]\n" + "\n".join(hint_lines) + "\n\n"
 
+    # ── 앵커 후보 힌트 (정규식 pre-extraction 결과) ───────────
+    anchor_hint_str = ""
+    if anchor_hint is not None and anchor_hint.confidence >= 0.55:
+        _type_label = {
+            "book_title": "책 제목",
+            "author"    : "저자명",
+            "ambiguous" : "책 제목 또는 저자명",
+        }
+        type_label = _type_label.get(anchor_hint.anchor_type, anchor_hint.anchor_type)
+        anchor_hint_str = (
+            f"[앵커 추출 힌트]\n"
+            f"- 비교 표현 '{anchor_hint.pattern}' 감지 → anchor가 존재할 가능성 높음\n"
+            f"- 후보: \"{anchor_hint.text}\" (추정 타입: {type_label})\n"
+            f"- 위 후보가 실제 책 제목이나 저자명이면 anchor로 추출하세요.\n"
+            f"  후보가 불완전하거나 아닌 것 같으면 발화 전체에서 올바른 anchor를 찾으세요.\n\n"
+        )
+
     messages.append({
         "role"   : "user",
-        "content": f"{slot_context}{signal_hint}[사용자 발화]\n{query}"
+        "content": f"{slot_context}{signal_hint}{anchor_hint_str}[사용자 발화]\n{query}"
     })
 
     return messages
