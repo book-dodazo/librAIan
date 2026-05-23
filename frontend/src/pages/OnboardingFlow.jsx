@@ -134,7 +134,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
       preferred_length,
       disliked_keywords:    selectedKws,
       age:                  selectedAge,
-      frequent_libraries:   selectedLibs.map(l => l.name),
+      frequent_libraries:   selectedLibs.map(l => ({ name: l.name, code: l.code || "" })),
     });
   };
 
@@ -458,7 +458,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
   if (step === 'libraries') {
     const addLib = (lib) => {
       if (!selectedLibs.find(l => l.name === lib.name)) {
-        setSelectedLibs(p => [...p, lib]);
+        setSelectedLibs(p => [...p, { name: lib.name, address: lib.address, code: lib.code || "" }]);
       }
       setLibQuery('');
       setLibResults([]);

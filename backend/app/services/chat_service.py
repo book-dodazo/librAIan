@@ -245,8 +245,18 @@ class ChatService:
         from app.core.session_logger import PipelineLog
         from app.db.database import SessionLocal
 
+        # 온보딩 도서관 코드 추출 (첫 번째 도서관 우선)
+        ob_lib_code: Optional[str] = None
+        if context.onboarding:
+            libs = context.onboarding.get("frequent_libraries") or []
+            for lib in libs:
+                code = lib.get("code") if isinstance(lib, dict) else None
+                if code:
+                    ob_lib_code = code
+                    break
+
         start    = time.time()
-        pipeline = await run_full_pipeline(context)
+        pipeline = await run_full_pipeline(context, lib_code=ob_lib_code)
         elapsed  = int((time.time() - start) * 1000)
 
         context.rag_query = pipeline.rag_query

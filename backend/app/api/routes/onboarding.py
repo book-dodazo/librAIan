@@ -96,7 +96,11 @@ def search_libraries(q: str = Query(..., min_length=1)):
 
         # 도서관 이름 또는 주소에 키워드 포함된 것만 반환
         matched = [
-            {"name": lib.get("libName", ""), "address": lib.get("address", "")}
+            {
+                "name"   : lib.get("libName", ""),
+                "address": lib.get("address", ""),
+                "code"   : lib.get("libCode", ""),
+            }
             for lib in libs
             if keyword in lib.get("libName", "").lower()
             or keyword in lib.get("address", "").lower()
