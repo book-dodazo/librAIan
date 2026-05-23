@@ -34,6 +34,30 @@ from app.prompts.response import RECOMMENDATION_REASON_PROMPT
 logger = logging.getLogger(__name__)
 
 
+# ── 리뷰 텍스트 빌더 ───────────────────────────────────────────
+
+def _build_reader_review(review: dict, review_count: int) -> str:
+    """
+    DB review JSON + review_count → 프롬프트용 독자 평가 텍스트.
+    리뷰가 없으면 빈 문자열 반환.
+    """
+    if not review or review_count == 0:
+        return ""
+
+    parts = []
+    if review.get("strengths"):
+        parts.append(f"좋은 점: {review['strengths']}")
+    if review.get("reader_reaction"):
+        parts.append(f"독자 반응: {review['reader_reaction']}")
+    if review.get("weaknesses"):
+        parts.append(f"아쉬운 점: {review['weaknesses']}")
+
+    if not parts:
+        return ""
+
+    return f"(리뷰 {review_count}건) " + " / ".join(parts)
+
+
 # ── DB 조회 ────────────────────────────────────────────────────
 
 def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
@@ -49,7 +73,7 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
     from sqlalchemy import text
     placeholders = ", ".join(f"'{isbn}'" for isbn in isbns)
     query = text(f"""
-        SELECT isbn, ori_cover_s, book_intro
+        SELECT isbn, ori_cover_s, book_intro, review, review_count
         FROM books
         WHERE isbn IN ({placeholders})
     """)
@@ -58,9 +82,20 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
     try:
         rows = db.execute(query).fetchall()
         for row in rows:
+            # review JSON에서 독자 반응 텍스트 추출
+            review_raw = row[3] or {}
+            if isinstance(review_raw, str):
+                import json as _json
+                try:
+                    review_raw = _json.loads(review_raw)
+                except Exception:
+                    review_raw = {}
+            reader_review = _build_reader_review(review_raw, row[4] or 0)
+
             result[row[0]] = {
-                "cover_url"  : row[1] or "",
-                "book_intro" : (row[2] or "")[:800],  # 프롬프트 길이 제한
+                "cover_url"     : row[1] or "",
+                "book_intro"    : (row[2] or "")[:800],
+                "reader_review" : reader_review,
             }
     except Exception as e:
         logger.error("책 상세 정보 조회 실패: %s", e)
@@ -157,6 +192,7 @@ async def _generate_reason(
     request_analysis = _build_request_analysis(rag_query, original_query)
     user_profile     = _build_user_profile(onboarding)
 
+    reader_review = book_detail.get("reader_review", "")
     prompt = RECOMMENDATION_REASON_PROMPT.format(
         request_analysis = request_analysis,
         user_profile     = user_profile,
@@ -164,6 +200,7 @@ async def _generate_reason(
         author           = book.get("author", ""),
         category         = book.get("category", ""),
         book_intro       = book_detail.get("book_intro", "정보 없음"),
+        reader_review    = reader_review if reader_review else "리뷰 정보 없음",
     )
 
     try:
