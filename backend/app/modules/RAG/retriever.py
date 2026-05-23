@@ -56,7 +56,6 @@ def get_small_category_embeddings():
     return _small_cate_cache
 
 def make_headers():
-
     return {
         "Authorization": f"Bearer {CLOVA_API_KEY}",
         "X-NCP-CLOVASTUDIO-REQUEST-ID": str(uuid.uuid4()),
@@ -138,9 +137,13 @@ def get_similar_small_categories(
     subject,
     small_category_embeddings,
     top_k=20,
-    threshold=0.7
+    threshold=0.7,
+    embedding_model="kure"
 ):
-    query_vec = get_embedding(subject)
+    query_vec = get_embedding(
+        subject,
+        embedding_model=embedding_model
+        )
 
     results = []
 
@@ -210,8 +213,8 @@ def parse_page_conditions(page_range, around_margin=30):
 
     return page_filter, []
 
-mid_bonus = 0.08
-small_bonus = 0.05
+mid_bonus = 0.00
+small_bonus = 0.00
 
 #==================================================================
 #                          온보딩 데이터 검색
@@ -1664,6 +1667,7 @@ def normalize_scores(results, score_key="score"):
 
 def full_hybrid(
     result,
+    index_name="books_review_full",
     size=20,
     bm25_candidate_size=100,
     dense_candidate_size=100,
@@ -1674,7 +1678,8 @@ def full_hybrid(
     bm25_weight=1.0,
     dense_weight=1.0,
     small_category_embeddings=None,
-    embedding_field="embedding_kure"
+    embedding_field="embedding_kure",
+    embedding_model="kure"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
@@ -1686,18 +1691,19 @@ def full_hybrid(
 
     bm25_results = full_bm25(
         result=result,
-        index_name="books_review_full",
+        index_name=index_name,
         size=bm25_candidate_size,
         small_category_embeddings=small_category_embeddings
     )
 
     dense_results = full_dense(
         result=result,
-        index_name="books_review_full",
+        index_name=index_name,
         size=dense_candidate_size,
         num_candidates=num_candidates,
         small_category_embeddings=small_category_embeddings,
-        embedding_field=embedding_field
+        embedding_field=embedding_field,
+        embedding_model=embedding_model
     )
 
     merged = {}
@@ -1791,6 +1797,7 @@ def full_hybrid(
 
 def chunk_hybrid(
     result,
+    index_name="books_review_full",
     size=20,
     bm25_weight=1.0,
     dense_weight=1.0,
@@ -1802,14 +1809,15 @@ def chunk_hybrid(
     overlap_bonus=0.0,
     rrf_k=60,
     small_category_embeddings=None,
-    embedding_field="embedding_kure"
+    embedding_field="embedding_kure",
+    embedding_model="kure"
 ):
     if small_category_embeddings is None:
         small_category_embeddings = get_small_category_embeddings()
 
     bm25_results = chunk_bm25(
         result=result,
-        index_name="books_review_chunk",
+        index_name=index_name,
         size=bm25_candidate_size,
         candidate_size=bm25_candidate_size,
         top_k_per_book=top_k_per_book,
@@ -1818,13 +1826,14 @@ def chunk_hybrid(
 
     dense_results = chunk_dense(
         result=result,
-        index_name="books_review_chunk",
+        index_name=index_name,
         size=dense_candidate_size,
         candidate_size=dense_candidate_size,
         num_candidates=num_candidates,
         top_k_per_book=top_k_per_book,
         small_category_embeddings=small_category_embeddings,
-        embedding_field=embedding_field
+        embedding_field=embedding_field,
+        embedding_model=embedding_model
     )
 
     merged = {}

@@ -12,20 +12,36 @@
 #   v0.3 - signal 모듈 통합
 #          extract_slots: LLM 호출 전에 휴리스틱 신호 감지 실행
 #          SignalResult를 LLM 프롬프트에 importance 힌트로 전달
+#   v0.4 - anchor_extractor 통합
+#          extract_slots: LLM 호출 전 정규식으로 anchor 후보 pre-extraction
+#          extract_anchor_candidate(), is_likely_author() import 추가
+#          _extract_anchor_from_raw(): is_likely_author 휴리스틱으로 저자명/제목 자동 분류
+#          _ANCHOR_FROM_CB_PATTERN: "처럼"/"만큼"/"스타일의"/"수준으로" 등 패턴 추가
+#        - LLM holistic sufficiency judgment 추가 (HCX-007, Call 2)
+#          extract_slots: slot 추출 후 HCX-007로 RAG 준비 여부 + 다음 질문 동시 판단
+#          rag_ready_from_llm / llm_confidence / llm_slots_to_ask / llm_question / llm_choices
+#          절대 규칙 코드 레벨 강제 (slots_to_ask + rag_ready 충돌 방어)
+#        - temperature 0.1 → 0.0 (JSON 일관성 향상)
+#        - get_slots_to_ask: LLM holistic judgment 우선, rule-based는 fallback으로
 # ============================================================
 """
 Slot Filler: slot 추출 및 우선순위 결정
 
 역할:
     1. LLM 호출로 사용자 발화에서 slot을 추출해 SessionContext에 반영
-    2. 현재 채워진 slot 패턴을 분석해 다음에 물어볼 slot 우선순위 결정
-    3. 멀티턴에서 slot을 누적 업데이트 (이미 채워진 slot은 보존)
+    2. HCX-007로 전체 슬롯 상태를 평가해 RAG 준비 여부 + 다음 질문 동시 판단
+    3. 현재 채워진 slot 패턴 + LLM 판단을 종합해 다음에 물어볼 slot 우선순위 결정
+    4. 멀티턴에서 slot을 누적 업데이트 (이미 채워진 slot은 보존)
 
-처리 흐름:
+처리 흐름 (extract_slots):
     쿼리
-    → signal.detect() — 휴리스틱 신호 감지 + importance/uncertainty 계산
-    → LLM 호출 — signal 결과를 힌트로 넘겨 슬롯 값 추출
-    → _apply_extraction() — LLM 결과를 SessionContext에 반영
+    → [1] signal.detect() — 휴리스틱 신호 감지 + importance/uncertainty 계산
+    → [1-1] anchor_extractor — 비교 표현 정규식 pre-extraction (LLM 힌트용)
+    → [2] LLM(HCX-DASH-002) 호출 — signal + anchor_hint를 힌트로 슬롯 값 추출
+    → [3] _apply_extraction() — LLM 결과를 SessionContext에 반영
+    → [4] LLM(HCX-007) holistic sufficiency judgment
+           슬롯 상태 전체를 보고 rag_ready / confidence / slots_to_ask / question / choices 판단
+           코드 레벨 절대 규칙 강제 (slots_to_ask↔rag_ready 충돌 방어, confidence<70 차단)
 
 슬롯 채움 정책:
     - direct로 채워진 slot은 덮어쓰지 않음 (_is_locked)
@@ -33,10 +49,11 @@ Slot Filler: slot 추출 및 우선순위 결정
     - mood는 한 번 채워지면 같은 세션에서 업데이트하지 않음
     - comparison_basis는 LLM 추출 또는 세션 질문 버튼으로 채울 수 있음
 
-우선순위 결정 원칙:
-    - 추천 실패를 가장 크게 줄이는 slot을 먼저 질문
-    - 채워진 slot 패턴으로 매 턴 재평가 (_PRIORITY_CONDITIONS)
-    - 연관성 높은 slot끼리 묶어서 한 질문으로 처리 (_group_slots)
+우선순위 결정 (get_slots_to_ask):
+    1. Rule-based 선행 체크: coarse 매핑 실패 / STILL_BROAD_FINES / reading_level 강제 질문
+    2. LLM holistic judgment (llm_slots_to_ask) 우선 사용
+    3. LLM 판단 실패 시 rule-based fallback (_get_slots_to_ask_fallback)
+    4. 연관성 높은 slot끼리 묶어서 한 질문으로 처리 (_group_slots)
 """
 import logging
 import re

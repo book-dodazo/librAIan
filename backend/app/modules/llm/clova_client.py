@@ -7,6 +7,9 @@
 #   v0.2 - [FIX] CLOVA_API_KEY 미설정 시 즉시 명확한 에러 메시지 출력
 #           (기존: OpenAI SDK가 401 에러를 뱉어 원인 파악 어려움)
 #   v0.3 - [FIX] JSON 파싱 시 ```json 코드블록 제거 로직 보강
+#   v0.4 - 듀얼 모델 지원: chat_complete / chat_complete_json에 model 파라미터 추가
+#           HCX-DASH-002 (기본) + HCX-007 (충분도 판단 / 질문 생성) 혼용 구조
+#           max_tokens=None 처리 추가 (HCX-007은 max_tokens 파라미터 미지원 → 생략)
 # ============================================================
 """
 CLOVA Studio LLM 클라이언트 래퍼
