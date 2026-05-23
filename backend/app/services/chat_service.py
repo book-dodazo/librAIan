@@ -144,6 +144,12 @@ class ChatService:
 
             sl.update_turn(slots_after=context.slots)
 
+        # ── Refinement: 이전 추천 결과 있고 수정 요청이면 슬롯 질문 스킵 → 바로 RAG ──
+        if context.modification_request and context.previous_result:
+            logger.info("refinement 감지 (%s) — 이전 ISBN %d개 제외 후 RAG 재실행",
+                        context.modification_request, len(context.previous_result))
+            return await self._build_rag_response(context, sl)
+
         # ── 개인화 체크인 턴 (Rule-based — LLM 게이트 앞에서 실행) ─────
         # 대분류 요청 + 관련 프로파일 있고 mood 없을 때 → LLM 판단 무관하게 먼저 물어봄
         # (LLM이 rag_ready=false를 반환해도 fallback이 개인화 질문을 막는 것 방지)
@@ -261,6 +267,13 @@ class ChatService:
 
         context.rag_query = pipeline.rag_query
         final_results     = pipeline.final_results
+
+        # Refinement를 위해 이번 추천 ISBN 목록 저장
+        # 다음 턴에 "다른거 추천해줘" 등의 요청이 오면 exclude_isbns로 활용
+        if final_results:
+            context.previous_result = [
+                r.get("isbn", "") for r in final_results if r.get("isbn")
+            ]
 
         # ── 결과 카드 생성 (표지/소개 DB 조회 + 추천 이유 LLM 생성) ──
         result_cards: list[dict] = []
