@@ -688,16 +688,6 @@ def get_slots_to_ask(context: SessionContext) -> list[str]:
     if context.rag_ready_from_llm:
         return []
 
-    # [5] topic_subject를 이미 물었고 topic이 채워져 있으면 → RAG 진행
-    # 사용자가 "아무거나"/"상관없음" 등으로 선택을 거부한 것 → 현재 상태로 검색
-    # LLM이 rag_ready=False + slots_to_ask=[] 모순 상태일 때도 이 규칙이 처리
-    if (
-        "topic_subject" in asked
-        and context.slots.topic.is_filled()
-    ):
-        logger.info("topic_subject 이미 질문 + topic 채워짐 — 사용자 비선택 의사 수용, RAG 진행")
-        return []
-
     # LLM이 명시한 슬롯 목록 우선 사용 (이미 질문한/채워진 슬롯 제외)
     if context.llm_slots_to_ask:
         # 이미 채워진 concrete 슬롯 집합 (topic_subject는 제외 — topic이 있어도 세부화 필요할 수 있음)
@@ -755,6 +745,18 @@ def _get_slots_to_ask_fallback(context: SessionContext) -> list[str]:
         empty.add("location")
 
     empty = empty - asked
+
+    # purpose 스킵: coarse가 _SKIP_PURPOSE_COARSE 계열이거나
+    # coarse가 없어도 fine에 소설/에세이 관련 표현이 있으면 제외
+    # (예: "소설책" → coarse=[] 이지만 purpose 묻지 않아야 함)
+    _FICTION_FINE_HINTS = {"소설", "소설책", "시", "에세이", "시/에세이", "만화"}
+    _fb_coarse = set(slots.topic.coarse or [])
+    _fb_fine   = set(slots.topic.fine   or [])
+    if (
+        _fb_coarse.issubset(_SKIP_PURPOSE_COARSE)
+        or (not _fb_coarse and _fb_fine & _FICTION_FINE_HINTS)
+    ):
+        empty.discard("purpose")
 
     if uncertainty:
         empty = {s for s in empty if uncertainty.get(s, "high") != "low"}
