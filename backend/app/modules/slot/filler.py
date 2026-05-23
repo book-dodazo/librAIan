@@ -688,6 +688,16 @@ def get_slots_to_ask(context: SessionContext) -> list[str]:
     if context.rag_ready_from_llm:
         return []
 
+    # [5] topic_subject를 이미 물었고 topic이 채워져 있으면 → RAG 진행
+    # 사용자가 "아무거나"/"상관없음" 등으로 선택을 거부한 것 → 현재 상태로 검색
+    # LLM이 rag_ready=False + slots_to_ask=[] 모순 상태일 때도 이 규칙이 처리
+    if (
+        "topic_subject" in asked
+        and context.slots.topic.is_filled()
+    ):
+        logger.info("topic_subject 이미 질문 + topic 채워짐 — 사용자 비선택 의사 수용, RAG 진행")
+        return []
+
     # LLM이 명시한 슬롯 목록 우선 사용 (이미 질문한/채워진 슬롯 제외)
     if context.llm_slots_to_ask:
         # 이미 채워진 concrete 슬롯 집합 (topic_subject는 제외 — topic이 있어도 세부화 필요할 수 있음)
