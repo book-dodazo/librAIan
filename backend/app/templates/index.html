@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>librAIan — 시나리오 평가 데모</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&family=Pretendard:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink:#1a1714; --ink-soft:#4a4540; --ink-muted:#9a9590;
+    --paper:#f5f0e8; --paper-2:#ede8dc; --paper-3:#e2ddd0;
+    --accent:#8b4513; --line:rgba(26,23,20,0.12); --radius:4px;
+    --serif:'Nanum Myeongjo',Georgia,serif; --sans:'Pretendard',sans-serif;
+  }
+  html,body { height:100%; background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.6; }
+  .shell { display:grid; grid-template-columns:240px 1fr; height:100vh; overflow:hidden; }
+
+  /* ── 사이드바 ── */
+  .sidebar { background:var(--ink); color:var(--paper); display:flex; flex-direction:column; padding:24px 20px; border-right:1px solid rgba(255,255,255,0.06); overflow:hidden; position:relative; }
+  .sidebar::before { content:''; position:absolute; inset:0; background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); pointer-events:none; }
+  .logo { font-family:var(--serif); font-size:19px; font-weight:700; margin-bottom:3px; }
+  .logo-sub { font-size:9.5px; letter-spacing:2px; text-transform:uppercase; color:rgba(245,240,232,0.3); margin-bottom:24px; }
+  .nav { display:flex; flex-direction:column; gap:2px; margin-bottom:20px; }
+  .nav-btn { background:none; border:none; border-radius:6px; color:rgba(245,240,232,0.5); font-family:var(--sans); font-size:12.5px; padding:8px 10px; text-align:left; cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:7px; }
+  .nav-btn:hover { background:rgba(255,255,255,0.07); color:rgba(245,240,232,0.85); }
+  .nav-btn.active { background:rgba(255,255,255,0.12); color:var(--paper); font-weight:500; }
+  .nav-btn .icon { font-size:14px; width:18px; text-align:center; }
+  .section-label { font-size:9.5px; letter-spacing:2px; text-transform:uppercase; color:rgba(245,240,232,0.28); margin:14px 0 6px; }
+  .quick-list { list-style:none; display:flex; flex-direction:column; gap:3px; margin-bottom:16px; }
+  .quick-btn { background:none; border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius); color:rgba(245,240,232,0.55); font-family:var(--sans); font-size:11px; line-height:1.4; padding:7px 9px; text-align:left; cursor:pointer; transition:all .15s; position:relative; }
+  .quick-btn:hover { background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.18); color:var(--paper); transform:translateX(2px); }
+  .quick-btn::before { content:'›'; position:absolute; right:7px; top:50%; transform:translateY(-50%); opacity:0.3; }
+  .config-row { display:flex; gap:5px; margin-bottom:6px; }
+  .config-input { flex:1; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.11); border-radius:var(--radius); color:rgba(245,240,232,0.7); font-family:var(--sans); font-size:10.5px; padding:5px 7px; outline:none; }
+  .config-input:focus { border-color:rgba(255,255,255,0.28); }
+  .config-save { background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.14); border-radius:var(--radius); color:rgba(245,240,232,0.65); font-family:var(--sans); font-size:10.5px; padding:5px 9px; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .config-save:hover { background:rgba(255,255,255,0.18); color:var(--paper); }
+  .status-block { margin-top:auto; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; }
+  .status-row { display:flex; align-items:center; gap:6px; font-size:11px; color:rgba(245,240,232,0.38); margin-bottom:5px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:#4ade80; box-shadow:0 0 5px #4ade80; flex-shrink:0; }
+  .dot.off { background:#ef4444; box-shadow:0 0 5px #ef4444; }
+  .api-url-disp { font-size:9.5px; color:rgba(245,240,232,0.2); word-break:break-all; }
+
+  /* ── 메인 ── */
+  .main { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+  .panel { display:none; flex:1; flex-direction:column; overflow:hidden; }
+  .panel.active { display:flex; }
+
+  /* ── 채팅 패널 ── */
+  .topbar { padding:14px 26px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; background:var(--paper); flex-shrink:0; }
+  .topbar-title { font-family:var(--serif); font-size:14.5px; color:var(--ink-soft); }
+  .badge { font-size:10px; letter-spacing:.7px; text-transform:uppercase; padding:3px 8px; border:1px solid var(--line); border-radius:20px; color:var(--ink-muted); }
+  .badge-btn { background:none; font-family:var(--sans); cursor:pointer; transition:all .15s; }
+  .badge-btn:hover { background:var(--paper-2); color:var(--ink); }
+  .slot-bar { padding:5px 26px; border-bottom:1px solid var(--line); background:var(--paper-2); display:flex; align-items:center; gap:6px; font-size:10.5px; flex-shrink:0; min-height:30px; flex-wrap:wrap; }
+  .slot-bar-label { font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-muted); margin-right:2px; }
+  .slot-chip { padding:2px 8px; border-radius:20px; font-size:10px; font-weight:500; background:var(--accent); color:#fff; }
+  .slot-chip.empty { background:var(--paper-3); color:var(--ink-muted); }
+  .messages { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:18px; scroll-behavior:smooth; }
+  .messages::-webkit-scrollbar { width:3px; }
+  .messages::-webkit-scrollbar-thumb { background:var(--paper-3); border-radius:2px; }
+  .empty-state { margin:auto; text-align:center; max-width:320px; opacity:0; animation:fadeUp .5s .1s forwards; }
+  .empty-icon { font-size:34px; margin-bottom:14px; display:block; }
+  .empty-state h2 { font-family:var(--serif); font-size:19px; margin-bottom:7px; }
+  .empty-state p { font-size:13px; color:var(--ink-muted); line-height:1.7; }
+  .msg { display:flex; gap:11px; animation:fadeUp .25s ease forwards; max-width:680px; }
+  .msg.user { flex-direction:row-reverse; align-self:flex-end; }
+  .msg.assistant { align-self:flex-start; }
+  .avatar { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; margin-top:2px; }
+  .msg.user .avatar { background:var(--ink); color:var(--paper); font-family:var(--serif); font-weight:700; font-size:11px; }
+  .msg.assistant .avatar { background:var(--accent); color:#fff; font-size:14px; }
+  .bubble { padding:11px 15px; border-radius:2px 12px 12px 12px; font-size:13.5px; line-height:1.7; max-width:480px; }
+  .msg.user .bubble { background:var(--ink); color:var(--paper); border-radius:12px 2px 12px 12px; }
+  .msg.assistant .bubble { background:#fff; color:var(--ink); border:1px solid var(--line); box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+  .status-tag { display:inline-flex; align-items:center; gap:4px; font-size:10px; letter-spacing:.5px; padding:2px 8px; border-radius:20px; margin-bottom:6px; font-weight:500; }
+  .status-tag.clarification { background:#e0f2fe; color:#0c4a6e; border:1px solid #bae6fd; }
+  .status-tag.rag-ready { background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
+  .status-tag.error { background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca; }
+  .status-tag.general { background:#f5f3ff; color:#4c1d95; border:1px solid #ddd6fe; }
+  .clarify-card { margin-top:9px; padding:10px 13px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; font-size:12px; color:#0c4a6e; }
+  .clarify-card strong { display:block; font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#0369a1; margin-bottom:6px; }
+  .choices-wrap { display:flex; flex-wrap:wrap; gap:5px; }
+  .choice-btn { background:#fff; border:1.5px solid #bae6fd; border-radius:20px; color:#0c4a6e; font-family:var(--sans); font-size:11.5px; padding:4px 11px; cursor:pointer; transition:all .15s; }
+  .choice-btn:hover { background:#e0f2fe; border-color:#38bdf8; }
+  .choice-btn.escape { border-color:var(--line); color:var(--ink-muted); }
+  .restart-row { margin-top:7px; padding-top:7px; border-top:1px solid #bae6fd; }
+  .restart-btn { background:none; border:none; color:#94a3b8; font-family:var(--sans); font-size:11px; cursor:pointer; padding:0; transition:color .15s; display:flex; align-items:center; gap:4px; }
+  .restart-btn:hover { color:#ef4444; }
+  .confirm-card { margin-top:9px; padding:11px 13px; background:#fefce8; border:1px solid #fde68a; border-radius:6px; font-size:12px; color:#713f12; }
+  .confirm-card strong { display:block; font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#92400e; margin-bottom:6px; }
+  .confirm-summary { margin-bottom:7px; }
+  .confirm-summary li { list-style:none; padding:2px 0; font-size:12px; }
+  .confirm-summary li::before { content:'• '; }
+  .confirm-summary li.type-inferred { color:#92400e; font-weight:500; }
+  .confirm-summary li.type-inferred::before { color:#f59e0b; }
+  .confirm-summary li.type-direct { color:#1e3a5f; }
+  .confirm-summary li.type-direct::before { color:#3b82f6; }
+  .confirm-section-label { font-size:9px; letter-spacing:1px; text-transform:uppercase; margin:6px 0 3px; opacity:0.6; }
+  .confirm-choices { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .confirm-btn { background:#fff; border:1.5px solid #fde68a; border-radius:20px; color:#713f12; font-family:var(--sans); font-size:11.5px; padding:4px 11px; cursor:pointer; transition:all .15s; }
+  .confirm-btn:hover { background:#fef9c3; border-color:#f59e0b; }
+  .confirm-btn.confirm-yes { border-color:#86efac; color:#14532d; background:#f0fdf4; }
+  .confirm-btn.confirm-yes:hover { background:#dcfce7; border-color:#4ade80; }
+  .rag-card { margin-top:9px; padding:10px 13px; background:var(--paper); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:0 6px 6px 0; font-size:12px; color:var(--ink-soft); }
+  .rag-card strong { display:block; font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--accent); margin-bottom:5px; }
+  .rag-row { margin-top:4px; display:flex; gap:7px; align-items:flex-start; }
+  .rag-key { font-size:9px; color:var(--ink-muted); min-width:75px; padding-top:1px; flex-shrink:0; }
+  .rag-val { font-size:11px; color:var(--ink); word-break:break-all; }
+  .results-card { margin-top:9px; padding:10px 13px; background:#fff; border:1px solid var(--line); border-radius:6px; }
+  .results-card strong { display:block; font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-muted); margin-bottom:7px; }
+  .result-item { padding:7px 0; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:flex-start; }
+  .result-item:last-child { border-bottom:none; padding-bottom:0; }
+  .result-rank { font-family:var(--serif); font-size:14px; font-weight:700; color:var(--accent); min-width:22px; line-height:1.2; }
+  .result-info { flex:1; }
+  .result-title { font-size:12.5px; font-weight:500; margin-bottom:1px; }
+  .result-meta { font-size:10.5px; color:var(--ink-muted); }
+  .result-avail { font-size:10px; padding:2px 6px; border-radius:20px; white-space:nowrap; align-self:center; flex-shrink:0; }
+  .result-avail.avail-y { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  .result-avail.avail-n { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+  .result-avail.avail-none { background:var(--paper-2); color:var(--ink-muted); border:1px solid var(--line); }
+  .typing { display:flex; gap:4px; padding:12px 15px; background:#fff; border:1px solid var(--line); border-radius:2px 12px 12px 12px; width:fit-content; }
+  .typing span { width:6px; height:6px; background:var(--ink-muted); border-radius:50%; animation:bounce .9s infinite; }
+  .typing span:nth-child(2) { animation-delay:.15s; }
+  .typing span:nth-child(3) { animation-delay:.30s; }
+  .input-area { padding:14px 26px 18px; border-top:1px solid var(--line); background:var(--paper); flex-shrink:0; }
+  .input-wrap { display:flex; align-items:flex-end; gap:8px; background:#fff; border:1.5px solid var(--line); border-radius:8px; padding:9px 11px 9px 15px; transition:border-color .2s,box-shadow .2s; }
+  .input-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(139,69,19,0.07); }
+  textarea { flex:1; background:none; border:none; outline:none; font-family:var(--sans); font-size:13.5px; color:var(--ink); resize:none; line-height:1.6; min-height:22px; max-height:110px; overflow-y:auto; }
+  textarea::placeholder { color:var(--ink-muted); }
+  .send-btn { width:32px; height:32px; background:var(--ink); border:none; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .15s,transform .1s; }
+  .send-btn:hover { background:var(--accent); }
+  .send-btn:active { transform:scale(.93); }
+  .send-btn:disabled { background:var(--paper-3); cursor:not-allowed; }
+  .send-btn svg { width:14px; height:14px; fill:none; stroke:#fff; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .hint { font-size:10.5px; color:var(--ink-muted); margin-top:5px; padding-left:2px; }
+
+  /* ── 공통 패널 ── */
+  .panel-header { padding:14px 26px; border-bottom:1px solid var(--line); background:var(--paper); flex-shrink:0; display:flex; align-items:center; justify-content:space-between; }
+  .panel-title { font-family:var(--serif); font-size:14.5px; color:var(--ink-soft); }
+  .panel-content { flex:1; overflow-y:auto; padding:24px; }
+  .panel-content::-webkit-scrollbar { width:4px; }
+  .panel-content::-webkit-scrollbar-thumb { background:var(--paper-3); border-radius:2px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:18px; margin-bottom:16px; }
+  .card-title { font-family:var(--serif); font-size:14px; font-weight:700; color:var(--ink); margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+  .form-group { margin-bottom:12px; }
+  .form-label { font-size:11px; font-weight:500; color:var(--ink-soft); display:block; margin-bottom:4px; letter-spacing:.3px; }
+  .form-input { width:100%; border:1.5px solid var(--line); border-radius:6px; font-family:var(--sans); font-size:13px; color:var(--ink); padding:8px 11px; outline:none; background:#fff; transition:border-color .2s; }
+  .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(139,69,19,0.07); }
+  .form-row { display:flex; gap:8px; }
+  .form-row .form-group { flex:1; }
+  .btn { display:inline-flex; align-items:center; gap:5px; border:none; border-radius:6px; cursor:pointer; font-family:var(--sans); font-weight:500; transition:all .15s; }
+  .btn-primary { background:var(--ink); color:var(--paper); font-size:13px; padding:8px 16px; }
+  .btn-primary:hover { background:var(--accent); }
+  .btn-secondary { background:var(--paper-2); color:var(--ink-soft); font-size:12.5px; padding:7px 13px; border:1px solid var(--line); }
+  .btn-secondary:hover { background:var(--paper-3); color:var(--ink); }
+  .btn-danger { background:#fef2f2; color:#b91c1c; font-size:12px; padding:6px 11px; border:1px solid #fecaca; }
+  .btn-sm { font-size:12px; padding:6px 11px; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .alert { padding:9px 13px; border-radius:6px; font-size:12.5px; margin-bottom:12px; display:flex; align-items:center; gap:7px; }
+  .alert-success { background:#f0fdf4; color:#14532d; border:1px solid #bbf7d0; }
+  .alert-error { background:#fef2f2; color:#7f1d1d; border:1px solid #fecaca; }
+  .alert-info { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .search-results-list { margin-top:10px; }
+  .search-result-item { padding:8px 0; border-bottom:1px solid var(--line); }
+  .search-result-item:last-child { border-bottom:none; }
+  .search-result-item .title { font-size:12.5px; font-weight:500; color:var(--ink); }
+  .search-result-item .sub { font-size:11px; color:var(--ink-muted); }
+  .json-pre { background:var(--paper-2); border:1px solid var(--line); border-radius:6px; padding:10px; font-family:monospace; font-size:11px; color:var(--ink-soft); overflow:auto; max-height:220px; white-space:pre-wrap; word-break:break-all; }
+
+  /* ── 🧪 평가 탭 전용 ── */
+  .eval-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .eval-select { background:rgba(26,23,20,0.06); border:1.5px solid var(--line); border-radius:6px; color:var(--ink); font-family:var(--sans); font-size:12px; padding:6px 10px; max-width:320px; outline:none; cursor:pointer; }
+  .eval-select:focus { border-color:var(--accent); }
+
+  /* 시나리오 인포 카드 */
+  .eval-info-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  .eval-info-block .lbl { font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--ink-muted); margin-bottom:3px; }
+  .eval-info-block .val { font-size:13px; font-weight:500; color:var(--ink); }
+  .eval-info-block .sub { font-size:11px; color:var(--ink-muted); margin-top:2px; line-height:1.5; }
+  .eval-tag-row { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+  .eval-tag { font-size:10px; padding:2px 8px; border-radius:20px; font-weight:500; }
+  .eval-tag.qt  { background:#ede9fe; color:#4c1d95; border:1px solid #c4b5fd; }
+  .eval-tag.qs  { background:#e0f2fe; color:#0c4a6e; border:1px solid #bae6fd; }
+  .eval-tag.cc  { background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
+  .eval-tag.ec  { background:#fce7f3; color:#831843; border:1px solid #fbcfe8; }
+
+  /* 턴 카드 */
+  .turn-card { background:#fff; border:1px solid var(--line); border-radius:8px; margin-bottom:14px; overflow:hidden; }
+  .turn-card-header { padding:9px 15px; border-bottom:1px solid var(--line); background:var(--paper-2); display:flex; align-items:center; justify-content:space-between; }
+  .turn-card-title { font-size:11.5px; font-weight:600; color:var(--ink-soft); }
+  .turn-card-body { padding:14px 15px; }
+
+  /* 계획된 입력 박스 */
+  .planned-box { background:var(--paper); border:1px solid var(--line); border-left:3px solid var(--ink-muted); border-radius:0 6px 6px 0; padding:10px 13px; font-size:13px; color:var(--ink); line-height:1.6; margin-bottom:12px; }
+  .planned-box .lbl { font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-muted); margin-bottom:5px; }
+
+  /* 응답 비교 그리드 */
+  .response-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+  .resp-col { border-radius:6px; padding:10px 12px; font-size:12px; line-height:1.6; }
+  .resp-col .resp-lbl { font-size:9px; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; font-weight:600; }
+  .resp-col.actual { background:#f0f9ff; border:1px solid #bae6fd; color:#0c4a6e; }
+  .resp-col.actual .resp-lbl { color:#0369a1; }
+  .resp-col.expected { background:var(--paper); border:1px solid var(--line); color:var(--ink-soft); }
+  .resp-col.expected .resp-lbl { color:var(--ink-muted); }
+
+  /* 유사도 배지 */
+  .sim-badge { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; padding:4px 11px; border-radius:20px; margin-bottom:10px; font-weight:500; }
+  .sim-badge.ok  { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  .sim-badge.diff{ background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+
+  /* 다음 입력 결정 영역 */
+  .next-input-section { border-top:1px solid var(--line); padding-top:12px; margin-top:2px; }
+  .next-input-lbl { font-size:9.5px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-muted); margin-bottom:7px; }
+  .next-planned-box { background:var(--paper-2); border:1px solid var(--line); border-radius:6px; padding:9px 12px; font-size:12.5px; color:var(--ink-soft); margin-bottom:9px; line-height:1.5; }
+  .eval-textarea { width:100%; border:1.5px solid var(--line); border-radius:6px; font-family:var(--sans); font-size:13px; color:var(--ink); padding:8px 11px; outline:none; resize:vertical; min-height:56px; margin-bottom:8px; background:#fff; transition:border-color .2s; }
+  .eval-textarea:focus { border-color:var(--accent); }
+
+  /* 완료 카드 */
+  .eval-complete-card { background:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:16px; margin-bottom:14px; }
+  .eval-complete-title { font-size:13.5px; font-weight:600; color:#713f12; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .eval-rag-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .eval-rag-col { background:#fff; border:1px solid var(--line); border-radius:6px; padding:11px 13px; }
+  .eval-rag-col .lbl { font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-muted); margin-bottom:7px; font-weight:600; }
+  .eval-rag-row { display:flex; gap:8px; align-items:flex-start; margin-top:4px; }
+  .eval-rag-key { font-size:9px; color:var(--ink-muted); min-width:68px; padding-top:1px; flex-shrink:0; }
+  .eval-rag-val { font-size:11px; color:var(--ink); word-break:break-all; }
+
+  /* 온보딩 탭 */
+  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(185px,1fr)); gap:10px; margin-top:12px; }
+  .cat-card { background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:10px 12px; }
+  .cat-name { font-size:12.5px; font-weight:500; color:var(--ink); margin-bottom:5px; }
+  .cat-subs { display:flex; flex-wrap:wrap; gap:3px; }
+  .cat-sub { font-size:10.5px; padding:2px 7px; background:var(--paper-2); border-radius:20px; color:var(--ink-muted); }
+
+  /* 인증 탭 */
+  .auth-tabs { display:flex; gap:4px; margin-bottom:16px; }
+  .auth-tab-btn { background:none; border:1.5px solid var(--line); border-radius:6px; color:var(--ink-muted); font-family:var(--sans); font-size:12.5px; padding:6px 14px; cursor:pointer; transition:all .15s; }
+  .auth-tab-btn.active { background:var(--ink); border-color:var(--ink); color:var(--paper); }
+  .profile-kv { padding:7px 0; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:flex-start; }
+  .profile-kv:last-child { border-bottom:none; }
+  .profile-k { font-size:11px; color:var(--ink-muted); min-width:90px; flex-shrink:0; }
+  .profile-v { font-size:12.5px; color:var(--ink); word-break:break-all; }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes bounce { 0%,80%,100% { transform:translateY(0); } 40% { transform:translateY(-6px); } }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ════ 사이드바 ════ -->
+  <aside class="sidebar">
+    <div class="logo">librAIan</div>
+    <div class="logo-sub">Demo &amp; Evaluation</div>
+
+    <nav class="nav">
+      <button class="nav-btn active" onclick="switchPanel('chat')"       id="nav-chat">      <span class="icon">💬</span> 채팅</button>
+      <button class="nav-btn"        onclick="switchPanel('eval')"       id="nav-eval">      <span class="icon">🧪</span> 시나리오 평가</button>
+      <button class="nav-btn"        onclick="switchPanel('onboarding')" id="nav-onboarding"><span class="icon">🗂</span> 온보딩 탐색</button>
+      <button class="nav-btn"        onclick="switchPanel('auth')"       id="nav-auth">      <span class="icon">👤</span> 인증 / 프로필</button>
+    </nav>
+
+    <div class="section-label">채팅 예시</div>
+    <ul class="quick-list">
+      <li><button class="quick-btn" onclick="sendQuick('요즘 지쳐있어서 가볍게 읽을 책 추천해줘')">힐링 도서</button></li>
+      <li><button class="quick-btn" onclick="sendQuick('SF랑 추리소설 추천해줘')">복수 주제</button></li>
+      <li><button class="quick-btn" onclick="sendQuick('한강 작가 책 추천해줘')">작가 기반</button></li>
+      <li><button class="quick-btn" onclick="sendQuick('불편한 편의점 같은 책')">유사 도서</button></li>
+      <li><button class="quick-btn" onclick="sendQuick('책 추천해줘')">모호한 질의</button></li>
+    </ul>
+
+    <div class="section-label">백엔드 URL</div>
+    <div class="config-row">
+      <input class="config-input" id="api-url-input" type="text" value="http://localhost:8000">
+      <button class="config-save" onclick="saveApiUrl()">저장</button>
+    </div>
+
+    <div class="status-block">
+      <div class="status-row">
+        <span class="dot off" id="status-dot"></span>
+        <span id="status-text">미연결</span>
+      </div>
+      <div class="api-url-disp" id="api-url-display">localhost:8000</div>
+    </div>
+  </aside>
+
+  <!-- ════ 메인 ════ -->
+  <main class="main">
+
+    <!-- ── 채팅 패널 ── -->
+    <section class="panel active" id="panel-chat">
+      <header class="topbar">
+        <span class="topbar-title">💬 슬롯 채우기 &amp; RAG 파이프라인</span>
+        <div style="display:flex;gap:7px;align-items:center">
+          <button class="badge badge-btn" onclick="clearChat()">대화 초기화</button>
+          <span class="badge">HCX-DASH-002</span>
+        </div>
+      </header>
+      <div class="slot-bar" id="slot-bar">
+        <span class="slot-bar-label">Slots</span>
+        <span class="slot-chip empty">topic —</span>
+        <span class="slot-chip empty">purpose —</span>
+        <span class="slot-chip empty">level —</span>
+      </div>
+      <div class="messages" id="messages">
+        <div class="empty-state" id="empty-state">
+          <span class="empty-icon">📚</span>
+          <h2>어떤 책을 찾고 계신가요?</h2>
+          <p>장르, 분위기, 주제 어떤 것이든 말씀해주세요.</p>
+        </div>
+      </div>
+      <div class="input-area">
+        <div class="input-wrap">
+          <textarea id="query-input" rows="1" placeholder="책에 대해 무엇이든 물어보세요…"
+            onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div class="hint">Enter 전송 · Shift+Enter 줄바꿈</div>
+      </div>
+    </section>
+
+    <!-- ── 🧪 시나리오 평가 패널 ── -->
+    <section class="panel" id="panel-eval">
+      <header class="panel-header">
+        <span class="panel-title">🧪 시나리오 평가 러너</span>
+        <div class="eval-toolbar">
+          <select id="eval-scenario-select" class="eval-select" onchange="onSelectScenario()">
+            <option value="">시나리오 불러오는 중…</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="eval-start-btn" onclick="startEval()" disabled>▶ 시작</button>
+          <button class="btn btn-secondary btn-sm" id="eval-download-btn" onclick="downloadEvalLog()" disabled>📥 로그 저장</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetEval()">↺ 초기화</button>
+        </div>
+      </header>
+
+      <div class="panel-content">
+        <!-- 시나리오 인포 카드 -->
+        <div class="card" id="eval-info-card" style="display:none">
+          <div class="eval-info-grid" id="eval-info-grid"></div>
+          <div class="eval-tag-row" id="eval-tag-row"></div>
+        </div>
+
+        <!-- 턴 실행 영역 -->
+        <div id="eval-turns-area"></div>
+      </div>
+    </section>
+
+    <!-- ── 온보딩 탐색 패널 ── -->
+    <section class="panel" id="panel-onboarding">
+      <header class="panel-header">
+        <span class="panel-title">🗂 온보딩 탐색</span>
+        <button class="badge badge-btn" onclick="loadCategories()">새로고침</button>
+      </header>
+      <div class="panel-content">
+        <div class="card">
+          <div class="card-title">📂 도서 카테고리 트리</div>
+          <div id="cat-loading" style="color:var(--ink-muted);font-size:13px">로드 중…</div>
+          <div class="cat-grid" id="cat-grid"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔍 도서 검색</div>
+          <div class="form-row">
+            <div class="form-group" style="flex:1"><input class="form-input" id="book-search-q" type="text" placeholder="책 제목 입력…" onkeydown="if(event.key==='Enter') searchBooks()"></div>
+            <div class="form-group" style="flex:0"><button class="btn btn-primary" onclick="searchBooks()">검색</button></div>
+          </div>
+          <div id="book-results" class="search-results-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏛 도서관 검색</div>
+          <div class="form-row">
+            <div class="form-group" style="flex:1"><input class="form-input" id="lib-search-q" type="text" placeholder="도서관 이름 입력…" onkeydown="if(event.key==='Enter') searchLibraries()"></div>
+            <div class="form-group" style="flex:0"><button class="btn btn-primary" onclick="searchLibraries()">검색</button></div>
+          </div>
+          <div id="lib-results" class="search-results-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 인증 / 프로필 패널 ── -->
+    <section class="panel" id="panel-auth">
+      <header class="panel-header"><span class="panel-title">👤 인증 / 프로필</span></header>
+      <div class="panel-content">
+        <div class="auth-tabs">
+          <button class="auth-tab-btn active" onclick="switchAuthTab('login')"   id="atab-login">로그인</button>
+          <button class="auth-tab-btn"        onclick="switchAuthTab('signup')"  id="atab-signup">회원가입</button>
+          <button class="auth-tab-btn"        onclick="switchAuthTab('profile')" id="atab-profile">프로필</button>
+        </div>
+        <div id="auth-alert"></div>
+        <div id="auth-login" class="card">
+          <div class="card-title">🔑 로그인</div>
+          <div class="form-group"><label class="form-label">이메일</label><input class="form-input" id="login-email" type="email" placeholder="example@email.com"></div>
+          <div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" id="login-pw" type="password" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter') doLogin()"></div>
+          <button class="btn btn-primary" onclick="doLogin()">로그인</button>
+        </div>
+        <div id="auth-signup" class="card" style="display:none">
+          <div class="card-title">✍️ 회원가입</div>
+          <div class="form-group"><label class="form-label">이름</label><input class="form-input" id="signup-name" type="text" placeholder="홍길동"></div>
+          <div class="form-group"><label class="form-label">이메일</label><input class="form-input" id="signup-email" type="email" placeholder="example@email.com"></div>
+          <div class="form-group"><label class="form-label">비밀번호</label><input class="form-input" id="signup-pw" type="password"></div>
+          <div class="form-group"><label class="form-label">온보딩 데이터 (JSON, 선택)</label><textarea class="form-input" id="signup-onboarding" rows="3" style="resize:vertical" placeholder='{"favorite_genres":["SF"]}'></textarea></div>
+          <button class="btn btn-primary" onclick="doSignup()">가입하기</button>
+        </div>
+        <div id="auth-profile" class="card" style="display:none">
+          <div class="card-title">🪪 내 프로필</div>
+          <div id="profile-content"><div style="color:var(--ink-muted);font-size:13px">로그인 후 조회할 수 있습니다.</div></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  전역 상태
+// ════════════════════════════════════════════════════════
+let apiBase   = localStorage.getItem('apiBase') || '{{ apiBase }}';
+let authToken = localStorage.getItem('authToken') || null;
+let authUser  = JSON.parse(localStorage.getItem('authUser') || 'null');
+
+// 채팅 상태
+let chatHistory  = [], context = null, pendingSlots = [], isLoading = false;
+
+// 평가 상태
+let evalScenarios      = [];   // 전체 시나리오 목록
+let evalCurrent        = null; // 선택된 시나리오
+let evalTurnIdx        = 0;    // 현재 처리 중인 턴 인덱스 (0-based)
+let evalCtx            = null; // 멀티턴 context
+let evalHistory        = [];   // 멀티턴 history
+let evalPending        = [];   // pending_slots
+let evalLog            = null; // 누적 로그
+let evalState          = 'IDLE'; // IDLE | INFO | TURN_READY | LOADING | TURN_DONE | WAITING_CUSTOM | COMPLETED
+
+// ── 초기화 ──────────────────────────────────────────
+document.getElementById('api-url-input').value = apiBase;
+document.getElementById('api-url-display').textContent = apiBase.replace('http://', '');
+checkHealth();
+setInterval(checkHealth, 5000);
+
+// ════════════════════════════════════════════════════════
+//  패널 전환
+// ════════════════════════════════════════════════════════
+function switchPanel(name) {
+  ['chat','eval','onboarding','auth'].forEach(p => {
+    document.getElementById(`panel-${p}`).classList.toggle('active', p === name);
+    document.getElementById(`nav-${p}`).classList.toggle('active', p === name);
+  });
+  if (name === 'eval'       && evalScenarios.length === 0) loadEvalScenarios();
+  if (name === 'onboarding' && !document.getElementById('cat-grid').children.length) loadCategories();
+}
+
+// ════════════════════════════════════════════════════════
+//  API URL / 상태
+// ════════════════════════════════════════════════════════
+function saveApiUrl() {
+  apiBase = document.getElementById('api-url-input').value.replace(/\/$/, '');
+  localStorage.setItem('apiBase', apiBase);
+  document.getElementById('api-url-display').textContent = apiBase.replace('http://', '');
+  checkHealth();
+}
+async function checkHealth() {
+  const dot = document.getElementById('status-dot'), txt = document.getElementById('status-text');
+  try {
+    const r = await fetch(`${apiBase}/api/health`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) { dot.classList.remove('off'); txt.textContent = '연결됨'; }
+    else throw 0;
+  } catch { dot.classList.add('off'); txt.textContent = '미연결'; }
+}
+
+// ════════════════════════════════════════════════════════
+//  채팅
+// ════════════════════════════════════════════════════════
+function handleKey(e) { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
+function sendQuick(text) {
+  switchPanel('chat');
+  document.getElementById('query-input').value=text;
+  autoResize(document.getElementById('query-input'));
+  sendMessage();
+}
+async function sendMessage() {
+  const input=document.getElementById('query-input'), query=input.value.trim();
+  if (!query||isLoading) return;
+  hideEmptyState(); isLoading=true; document.getElementById('send-btn').disabled=true;
+  input.value=''; input.style.height='auto';
+  appendUserBubble(query);
+  const loadId=appendLoading();
+  await callChatApi({query,history:chatHistory,context,selected_choice:null,pending_slots:null},loadId,query);
+}
+async function selectChoice(choiceJson,label) {
+  if (isLoading) return;
+  let choice; try{choice=typeof choiceJson==='string'?JSON.parse(choiceJson):choiceJson;}catch{choice={label,slots:{}};}
+  hideEmptyState(); isLoading=true; document.getElementById('send-btn').disabled=true;
+  appendUserBubble(label); const loadId=appendLoading();
+  await callChatApi({query:label,history:chatHistory,context,selected_choice:choice,pending_slots:pendingSlots},loadId,label);
+}
+async function confirmInferred(confirmed,fixSlots,label) {
+  if (isLoading) return;
+  hideEmptyState(); isLoading=true; document.getElementById('send-btn').disabled=true;
+  appendUserBubble(label); const loadId=appendLoading();
+  await callChatApi({query:label,history:chatHistory,context,confirm_inferred:confirmed,pending_slots:fixSlots||[],selected_choice:null},loadId,label);
+}
+async function callChatApi(body,loadId,userText) {
+  try {
+    const headers={'Content-Type':'application/json'};
+    if (authToken) headers['Authorization']=`Bearer ${authToken}`;
+    const res=await fetch(`${apiBase}/api/chat`,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(300000)});
+    removeLoading(loadId);
+    if (!res.ok){const e=await res.json().catch(()=>({}));appendAssistantError(e.detail||`서버 오류 (${res.status})`);return;}
+    const data=await res.json();
+    context=data.context||context; pendingSlots=data.pending_slots||[];
+    chatHistory.push({role:'user',content:userText});chatHistory.push({role:'assistant',content:data.message});
+    updateSlotBar(data.context); appendAssistantResponse(data);
+  } catch(err) {
+    removeLoading(loadId);
+    appendAssistantError(err.name==='TimeoutError'?'응답 시간 초과':'백엔드 연결 실패');
+    checkHealth();
+  } finally { isLoading=false; document.getElementById('send-btn').disabled=false; }
+}
+function updateSlotBar(ctx) {
+  const bar=document.getElementById('slot-bar'), slots=ctx?.slots||{};
+  const defs=[
+    {label:'topic',   get:()=>{const t=slots.topic;if(!t)return null;const p=[...(t.fine||[]),...(t.subject||[])];return p.length?p.join(', '):null;}},
+    {label:'purpose', get:()=>slots.purpose?.value||null},
+    {label:'level',   get:()=>({easy:'쉬운',medium:'적당',hard:'깊이'}[slots.reading_level?.value]||null)},
+    {label:'mood',    get:()=>slots.mood?.value||null},
+  ];
+  bar.innerHTML='<span class="slot-bar-label">Slots</span>';
+  defs.forEach(({label,get})=>{const val=get();const chip=document.createElement('span');chip.className='slot-chip'+(val?'':' empty');chip.textContent=val?`${label}: ${val}`:`${label} —`;bar.appendChild(chip);});
+  (slots.constraints||[]).forEach(c=>{const chip=document.createElement('span');chip.className='slot-chip';chip.style.background='#6b7280';chip.textContent=c.raw||String(c.value);bar.appendChild(chip);});
+  if (slots.availability_required){const chip=document.createElement('span');chip.className='slot-chip';chip.style.background='#0369a1';chip.textContent='지금 대출 가능';bar.appendChild(chip);}
+}
+function appendUserBubble(text) {
+  const div=document.createElement('div'); div.className='msg user';
+  div.innerHTML=`<div class="avatar">나</div><div class="bubble">${escHtml(text)}</div>`;
+  document.getElementById('messages').appendChild(div); scrollToBottom();
+}
+function appendAssistantResponse(data) {
+  const div=document.createElement('div'); div.className='msg assistant';
+  let tagClass,tagLabel;
+  if(data.error){tagClass='error';tagLabel='⚠ 오류';}
+  else if(data.is_confirmation){tagClass='clarification';tagLabel='🔍 확인';}
+  else if(data.needs_clarification){tagClass='clarification';tagLabel='❓ 추가 질문';}
+  else if(data.ready_for_rag){tagClass='rag-ready';tagLabel='📖 RAG 준비';}
+  else{tagClass='general';tagLabel='💬 일반';}
+  let extra='';
+  if (data.is_confirmation&&data.inferred_summary?.length) {
+    const byType={inferred:[],direct:[],constraint:[],anchor:[]};
+    data.inferred_summary.forEach(s=>{const t=s.type||'direct';if(byType[t])byType[t].push(s);});
+    const rs=(label,items,tc)=>{if(!items.length)return '';return `<div class="confirm-section-label">${label}</div><ul class="confirm-summary">${items.map(s=>`<li class="type-${tc}">${escHtml(s.label)}: <strong>${escHtml(String(s.value))}</strong></li>`).join('')}</ul>`;};
+    const sect=rs('추론된 값',byType.inferred,'inferred')+rs('명시된 값',byType.direct,'direct')+rs('제약',byType.constraint,'constraint')+rs('기준점',byType.anchor,'anchor');
+    const cbtns=(data.clarification_choices||[]).map(c=>{const isYes=c.confirm===true;const fs=JSON.stringify(c.pending_slots||[]);const el=encodeURIComponent(c.label);return `<button class="confirm-btn${isYes?' confirm-yes':''}" onclick="confirmInferred(${isYes},${fs},decodeURIComponent('${el}'))">${escHtml(c.label)}</button>`;}).join('');
+    extra=`<div class="confirm-card"><strong>파악 내용</strong>${sect}<div class="confirm-choices">${cbtns}</div><div class="restart-row"><button class="restart-btn" onclick="restartSession()">🔄 처음부터</button></div></div>`;
+  }
+  if (!data.is_confirmation&&data.needs_clarification&&data.clarification_choices?.length) {
+    const btns=data.clarification_choices.map(c=>{const isE=!c.slots||Object.keys(c.slots).length===0;const enc=encodeURIComponent(JSON.stringify(c));return `<button class="choice-btn${isE?' escape':''}" onclick="selectChoice(decodeURIComponent('${enc}'),'${escAttr(c.label)}')">${escHtml(c.label)}</button>`;}).join('');
+    extra=`<div class="clarify-card"><strong>선택지</strong><div class="choices-wrap">${btns}</div><div class="restart-row"><button class="restart-btn" onclick="restartSession()">🔄 처음부터</button></div></div>`;
+  }
+  if (data.ready_for_rag&&data.rag_query) {
+    const q=data.rag_query, rows=[];
+    if(q.semantic_query) rows.push(['semantic',q.semantic_query]);
+    if(q.keyword_query?.length) rows.push(['keywords',q.keyword_query.join(', ')]);
+    if(q.filters?.coarse_category?.length) rows.push(['대분류',q.filters.coarse_category.join(', ')]);
+    if(q.score_boost?.fine_category?.length) rows.push(['boost',q.score_boost.fine_category.join(', ')]);
+    rows.push(['availability',q.availability_required?'필수':'기본']);
+    const rh=rows.map(([k,v])=>`<div class="rag-row"><span class="rag-key">${k}</span><span class="rag-val">${escHtml(String(v))}</span></div>`).join('');
+    extra+=`<div class="rag-card"><strong>RAG 검색 쿼리</strong>${rh}</div>`;
+  }
+  if (data.ready_for_rag&&data.search_results?.length) {
+    const av=data.availability_index||{};
+    const ih=data.search_results.map(b=>{const isbn=b.isbn||'';const rank=b.final_rank||b.rank||'?';const title=b.title||isbn||'제목 없음';const meta=[b.author,b.publisher,b.final_score!=null?`점수 ${b.final_score}`:null].filter(Boolean).join(' · ');const a=av[isbn]||{};let ac='avail-none',at='조회 안 됨';if(a.loan_available==='Y'){ac='avail-y';at='대출 가능';}else if(a.has_book==='Y'){ac='avail-n';at='대출 불가';}else if(a.has_book==='N'){at='미소장';}
+    return `<div class="result-item"><div class="result-rank">${rank}</div><div class="result-info"><div class="result-title">${escHtml(title)}</div><div class="result-meta">${escHtml(meta)}</div></div><span class="result-avail ${ac}">${at}</span></div>`;}).join('');
+    extra+=`<div class="results-card"><strong>검색 결과 (${data.search_results.length}건)</strong>${ih}</div>`;
+  }
+  div.innerHTML=`<div class="avatar">📚</div><div class="bubble"><div><span class="status-tag ${tagClass}">${tagLabel}</span></div>${escHtml(data.message)}${extra}</div>`;
+  document.getElementById('messages').appendChild(div); scrollToBottom();
+}
+function appendAssistantError(msg) {
+  const div=document.createElement('div'); div.className='msg assistant';
+  div.innerHTML=`<div class="avatar">📚</div><div class="bubble"><div><span class="status-tag error">⚠ 오류</span></div>${escHtml(msg)}</div>`;
+  document.getElementById('messages').appendChild(div); scrollToBottom();
+}
+function appendLoading() {
+  const id='loading-'+Date.now(), div=document.createElement('div');
+  div.className='msg assistant'; div.id=id;
+  div.innerHTML=`<div class="avatar">📚</div><div class="typing"><span></span><span></span><span></span></div>`;
+  document.getElementById('messages').appendChild(div); scrollToBottom(); return id;
+}
+function removeLoading(id){document.getElementById(id)?.remove();}
+function restartSession(){chatHistory=[];context=null;pendingSlots=[];const div=document.createElement('div');div.className='msg assistant';div.innerHTML=`<div class="avatar">📚</div><div class="bubble"><div><span class="status-tag general">🔄 새로 시작</span></div>처음부터 다시 시작할게요!</div>`;document.getElementById('messages').appendChild(div);updateSlotBar(null);scrollToBottom();}
+function clearChat(){chatHistory=[];context=null;pendingSlots=[];document.getElementById('messages').innerHTML=`<div class="empty-state" id="empty-state"><span class="empty-icon">📚</span><h2>어떤 책을 찾고 계신가요?</h2><p>장르, 분위기, 주제 어떤 것이든 말씀해주세요.</p></div>`;updateSlotBar(null);}
+function hideEmptyState(){document.getElementById('empty-state')?.remove();}
+function scrollToBottom(){const el=document.getElementById('messages');el.scrollTop=el.scrollHeight;}
+
+// ════════════════════════════════════════════════════════
+//  🧪 시나리오 평가 러너
+// ════════════════════════════════════════════════════════
+
+// ── 시나리오 로드 ────────────────────────────────────
+async function loadEvalScenarios() {
+  const sel = document.getElementById('eval-scenario-select');
+  try {
+    const r = await fetch(`${apiBase}/api/eval/scenarios`);
+    if (!r.ok) throw new Error(r.status);
+    evalScenarios = await r.json();
+    sel.innerHTML = '<option value="">— 시나리오 선택 —</option>' +
+      evalScenarios.map(s =>
+        `<option value="${s.scenario_id}">[${s.scenario_id}] ${s.name} · ${s.query_type} · ${s.turn_count}턴</option>`
+      ).join('');
+  } catch(e) {
+    sel.innerHTML = `<option value="">❌ 로드 실패 (백엔드 실행 중?)</option>`;
+  }
+}
+
+// ── 시나리오 선택 ────────────────────────────────────
+function onSelectScenario() {
+  const id = document.getElementById('eval-scenario-select').value;
+  if (!id) { document.getElementById('eval-info-card').style.display='none'; document.getElementById('eval-start-btn').disabled=true; return; }
+  evalCurrent = evalScenarios.find(s => s.scenario_id === id);
+  if (!evalCurrent) return;
+  renderEvalInfo();
+  document.getElementById('eval-start-btn').disabled = false;
+  document.getElementById('eval-turns-area').innerHTML = '';
+}
+
+// ── 인포 카드 렌더 ───────────────────────────────────
+function renderEvalInfo() {
+  const s = evalCurrent;
+  const onb = s.onboarding || {};
+  const cats = (onb.preferred_categories || []).map(c=>`${c.main} › ${c.sub}`).join(' / ');
+  document.getElementById('eval-info-grid').innerHTML = `
+    <div class="eval-info-block"><div class="lbl">페르소나</div><div class="val">${escHtml(s.name)}</div><div class="sub">${escHtml(s.user_id)}</div></div>
+    <div class="eval-info-block"><div class="lbl">선호 카테고리</div><div class="sub">${escHtml(cats||'—')}</div></div>
+    <div class="eval-info-block"><div class="lbl">기피 키워드</div><div class="sub">${escHtml((onb.disliked_keywords||[]).join(', ')||'없음')}</div><div class="lbl" style="margin-top:4px">선호 권수</div><div class="sub">${escHtml(onb.preferred_length||'—')}</div></div>`;
+  document.getElementById('eval-tag-row').innerHTML = `
+    <span class="eval-tag qt">${escHtml(s.query_type)}</span>
+    <span class="eval-tag qs">${escHtml(s.query_specificity)}</span>
+    <span class="eval-tag cc">제약: ${escHtml(s.constraints_complexity)}</span>
+    ${s.edge_case?`<span class="eval-tag ec">edge: ${escHtml(s.edge_case)}</span>`:''}
+    <span style="font-size:11px;color:var(--ink-muted);margin-left:4px">예상 ${s.turn_count}턴</span>`;
+  document.getElementById('eval-info-card').style.display = '';
+}
+
+// ── 평가 시작 ────────────────────────────────────────
+function startEval() {
+  if (!evalCurrent) return;
+  evalTurnIdx = 0; evalCtx = null; evalHistory = []; evalPending = [];
+  evalLog = { scenario_id:evalCurrent.scenario_id, scenario_type:evalCurrent.scenario_type,
+    user_id:evalCurrent.user_id, name:evalCurrent.name, started_at:new Date().toISOString(), turns:[], final:{} };
+  document.getElementById('eval-turns-area').innerHTML = '';
+  document.getElementById('eval-start-btn').disabled = true;
+  document.getElementById('eval-download-btn').disabled = true;
+  evalState = 'TURN_READY';
+  renderCurrentTurnReady();
+}
+
+// ── 현재 턴 입력 카드 렌더 ──────────────────────────
+function renderCurrentTurnReady() {
+  const turnDef = evalCurrent.turns[evalTurnIdx];
+  if (!turnDef) { renderExtendedTurnCard(evalTurnIdx + 1); return; }
+  const turnNum = evalTurnIdx + 1;
+  const total   = evalCurrent.turns.length;
+
+  // 한국어·특수문자가 onclick 속성을 깨지 않도록 encodeURIComponent 사용
+  const encInput = encodeURIComponent(turnDef.user_input);
+
+  const card = document.createElement('div');
+  card.className = 'turn-card';
+  card.id = `eval-turn-card-${turnNum}`;
+  card.innerHTML = `
+    <div class="turn-card-header">
+      <span class="turn-card-title">Turn ${turnNum} / ${total}</span>
+    </div>
+    <div class="turn-card-body">
+      <div class="planned-box">
+        <div class="lbl">📤 계획된 입력 (scenario)</div>
+        ${escHtml(turnDef.user_input)}
+      </div>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="eval-send-planned-btn-${turnNum}"
+          onclick="evalSendTurn(${turnNum}, decodeURIComponent('${encInput}'), false)">
+          ▶ 계획대로 전송
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="evalShowCustom(${turnNum})">✏️ 직접 수정</button>
+      </div>
+      <div id="eval-custom-area-${turnNum}" style="display:none;margin-top:10px">
+        <textarea class="eval-textarea" id="eval-custom-input-${turnNum}" placeholder="수정된 입력을 직접 입력하세요…"
+          >${escHtml(turnDef.user_input)}</textarea>
+        <button class="btn btn-primary btn-sm" onclick="evalSendCustom(${turnNum})">▶ 이 내용으로 전송</button>
+      </div>
+    </div>`;
+  document.getElementById('eval-turns-area').appendChild(card);
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function evalShowCustom(turnNum) {
+  document.getElementById(`eval-custom-area-${turnNum}`).style.display = '';
+  document.getElementById(`eval-send-planned-btn-${turnNum}`).disabled = true;
+}
+function evalSendCustom(turnNum) {
+  const text = document.getElementById(`eval-custom-input-${turnNum}`).value.trim();
+  if (!text) return;
+  evalSendTurn(turnNum, text, true);
+}
+
+// ── 확장 턴 (시나리오 범위 초과) ────────────────────
+function renderExtendedTurnCard(turnNum) {
+  const planned = evalCurrent.turns.length;
+  const card = document.createElement('div');
+  card.className = 'turn-card';
+  card.id = `eval-turn-card-${turnNum}`;
+  card.innerHTML = `
+    <div class="turn-card-header" style="background:#fef3c7;border-bottom:1px solid #fde68a">
+      <span class="turn-card-title" style="color:#92400e">⚡ Turn ${turnNum} · 확장 턴 (시나리오 ${planned}턴 초과)</span>
+    </div>
+    <div class="turn-card-body">
+      <div style="font-size:11.5px;color:#92400e;margin-bottom:10px;padding:7px 10px;background:#fffbeb;border-radius:4px;border:1px solid #fde68a">
+        시나리오 계획 외 턴입니다. 계속 대화하거나 여기서 완료할 수 있습니다.
+      </div>
+      <textarea class="eval-textarea" id="eval-custom-input-${turnNum}"
+        placeholder="다음 발화를 직접 입력하세요…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();evalSendExtended(${turnNum});}"></textarea>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="eval-send-planned-btn-${turnNum}"
+          onclick="evalSendExtended(${turnNum})">▶ 전송</button>
+        <button class="btn btn-secondary btn-sm" onclick="evalForceComplete()">⏹ 여기서 완료</button>
+      </div>
+    </div>`;
+  document.getElementById('eval-turns-area').appendChild(card);
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function evalSendExtended(turnNum) {
+  const text = document.getElementById(`eval-custom-input-${turnNum}`).value.trim();
+  if (!text) return;
+  evalSendTurn(turnNum, text, true);
+}
+function evalForceComplete() {
+  evalComplete(null);
+}
+
+// ── 실제 API 호출 및 턴 처리 ────────────────────────
+async function evalSendTurn(turnNum, inputText, isCustom) {
+  const turnDef = evalCurrent.turns[evalTurnIdx];
+
+  // 버튼들 비활성화
+  document.querySelectorAll(`#eval-turn-card-${turnNum} button`).forEach(b=>b.disabled=true);
+
+  // 로딩 표시
+  const card = document.getElementById(`eval-turn-card-${turnNum}`);
+  const loadEl = document.createElement('div');
+  loadEl.id = `eval-loading-${turnNum}`;
+  loadEl.innerHTML = `<div style="display:flex;gap:4px;padding:12px 0"><span style="font-size:12px;color:var(--ink-muted)">API 호출 중…</span><div class="typing" style="align-self:center"><span></span><span></span><span></span></div></div>`;
+  card.querySelector('.turn-card-body').appendChild(loadEl);
+
+  try {
+    const body = {
+      query        : inputText,
+      history      : evalHistory,
+      context      : evalCtx,
+      user_profile : evalCurrent.onboarding || null,
+      selected_choice : null,
+      pending_slots   : evalPending,
+    };
+    const res = await fetch(`${apiBase}/api/chat`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body), signal:AbortSignal.timeout(300000),
+    });
+    loadEl.remove();
+
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}));
+      appendEvalError(card, e.detail || `API 오류 (${res.status})`);
+      resetEvalButtons(); return;
+    }
+
+    const data = await res.json();
+    evalCtx     = data.context || evalCtx;
+    evalPending = data.pending_slots || [];
+    evalHistory.push({role:'user', content:inputText});
+    evalHistory.push({role:'assistant', content:data.message});
+
+    // 로그 기록
+    const ctx = data.context || {};
+    const logEntry = {
+      turn         : turnNum,
+      input_source : isCustom ? 'custom' : 'planned',
+      actual_input : inputText,
+      planned_input: turnDef?.user_input || '(확장 턴)',
+
+      // ── 슬롯 추출 결과 ──────────────────────────────
+      slot_extraction: {
+        filled_slots : data.filled_slots || [],
+        slot_details : ctx.slots         || {},
+      },
+
+      // ── Sufficiency Judgment (HCX-007) ─────────────
+      sufficiency_judgment: {
+        rag_ready    : data.ready_for_rag,
+        confidence   : ctx.llm_confidence   ?? null,
+        slots_to_ask : ctx.llm_slots_to_ask || [],
+        reasoning    : ctx.llm_reasoning_raw || ctx.llm_reasoning || null,
+      },
+
+      // ── 시나리오 골드셋 (비교용, 확장 턴은 null) ────
+      expected: {
+        rag_ready    : turnDef?.sufficiency_judgment?.rag_ready || false,
+        slots_to_ask : turnDef?.sufficiency_judgment?.slots_to_ask || [],
+        reason       : turnDef?.sufficiency_judgment?.reason || '',
+        slot_changes : turnDef?.slot_changes   || {},
+        system_response: turnDef?.system_response || '',
+        rag_query    : turnDef?.rag_query       || null,
+      },
+
+      // ── 실제 LLM 생성 응답 ─────────────────────────
+      actual_message: data.message,
+
+      // ── 실제 응답 요약 ──────────────────────────────
+      actual_response_summary: {
+        message              : data.message,
+        needs_clarification  : data.needs_clarification,
+        ready_for_rag        : data.ready_for_rag,
+        clarification_choices: data.clarification_choices || null,
+        is_confirmation      : data.is_confirmation || false,
+      },
+
+      // ── RAG 쿼리 비교 (ready_for_rag 턴) ───────────
+      actual_rag_query  : data.ready_for_rag ? (data.rag_query || null) : null,
+    };
+    evalLog.turns.push(logEntry);
+
+    // 응답 비교 렌더
+    renderEvalTurnResult(card, turnNum, inputText, isCustom, turnDef, data);
+
+    evalTurnIdx++;
+
+    // 완료 판정: ready_for_rag=true일 때만 완료
+    // 시나리오 계획 턴이 소진되더라도 ready_for_rag가 false면 확장 턴 계속 진행
+    if (data.ready_for_rag) {
+      evalComplete(data);
+    } else {
+      // 다음 턴 준비 (계획 턴 소진 시 renderCurrentTurnReady → renderExtendedTurnCard)
+      renderCurrentTurnReady();
+    }
+
+  } catch(err) {
+    loadEl.remove();
+    appendEvalError(card, err.name==='TimeoutError'?'타임아웃':'연결 실패');
+    resetEvalButtons();
+  }
+}
+
+function resetEvalButtons() {
+  document.getElementById('eval-start-btn').disabled = false;
+}
+
+// ── 턴 결과 렌더 ─────────────────────────────────────
+function renderEvalTurnResult(card, turnNum, inputText, isCustom, turnDef, data) {
+  const body = card.querySelector('.turn-card-body');
+
+  // 방향 일치 여부 (확장 턴은 turnDef가 없으므로 비교 생략)
+  const isExtendedTurn = !turnDef;
+  const expectedRagReady = turnDef?.sufficiency_judgment?.rag_ready || false;
+  const sameDir = isExtendedTurn ? null : (data.ready_for_rag === expectedRagReady);
+  const simClass = isExtendedTurn ? 'ok' : (sameDir ? 'ok' : 'diff');
+  const simLabel = isExtendedTurn
+    ? '⚡ 확장 턴 — 시나리오 비교 없음'
+    : (sameDir ? '✓ 방향 일치 (needs_clarification / ready_for_rag)' : '! 방향 다름 — 다음 입력 수동 확인 권장');
+
+  // 실제 vs 예상 응답 비교
+  const expectedCol = isExtendedTurn
+    ? `<div class="resp-col expected"><div class="resp-lbl">📋 예상 응답 (scenario)</div><div style="color:var(--ink-muted);font-size:11.5px">확장 턴 — 골드셋 없음</div></div>`
+    : `<div class="resp-col expected">
+          <div class="resp-lbl">📋 예상 응답 (scenario)</div>
+          <div>${escHtml(turnDef.system_response||'—')}</div>
+          ${expectedRagReady ? `<div style="margin-top:5px;font-size:11px;color:#15803d">✅ rag_ready 예상</div>` : ''}
+          <div style="margin-top:5px;font-size:11px;color:var(--ink-muted)">
+            예상 슬롯: ${Object.keys(turnDef.slot_changes||{}).filter(k=>k!=='sufficiency_judgment').join(', ')||'없음'}
+          </div>
+        </div>`;
+  const resultHtml = `
+    <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+      <div class="sim-badge ${simClass}">${simLabel}</div>
+      ${isCustom ? `<div style="font-size:11px;color:#92400e;margin-bottom:8px">✏️ 커스텀 입력 사용됨: "${escHtml(inputText)}"</div>` : ''}
+      <div class="response-grid">
+        <div class="resp-col actual">
+          <div class="resp-lbl">📥 실제 응답</div>
+          <div><strong>${escHtml(data.message)}</strong></div>
+          ${data.needs_clarification&&data.clarification_choices?.length
+            ? `<div style="margin-top:6px;font-size:11px;color:#0369a1">선택지: ${data.clarification_choices.map(c=>escHtml(c.label)).join(' · ')}</div>` : ''}
+          ${data.ready_for_rag ? `<div style="margin-top:5px;font-size:11px;color:#15803d">✅ ready_for_rag</div>` : ''}
+          <div style="margin-top:5px;font-size:11px;color:#0369a1">채워진 슬롯: ${(data.filled_slots||[]).join(', ')||'없음'}</div>
+        </div>
+        ${expectedCol}
+      </div>
+    </div>`;
+  body.insertAdjacentHTML('beforeend', resultHtml);
+}
+
+function appendEvalError(card, msg) {
+  card.querySelector('.turn-card-body').insertAdjacentHTML('beforeend',
+    `<div class="alert alert-error" style="margin-top:10px">⚠ ${escHtml(msg)}</div>`);
+}
+
+// ── 평가 완료 ─────────────────────────────────────────
+function evalComplete(lastData) {
+  evalState = 'COMPLETED';
+  const area = document.getElementById('eval-turns-area');
+
+  // 마지막 턴 정답 RAG
+  const lastScenarioTurn = evalCurrent.turns[evalCurrent.turns.length - 1];
+  const expectedRag = lastScenarioTurn?.rag_query || null;
+  const actualRag   = lastData?.rag_query || null;
+
+  const ragHtml = (expectedRag || actualRag) ? `
+    <div class="eval-rag-grid">
+      ${renderEvalRagCol('📋 예상 RAG 쿼리', expectedRag)}
+      ${renderEvalRagCol('📥 실제 RAG 쿼리', actualRag)}
+    </div>` : '<div style="font-size:12px;color:var(--ink-muted)">RAG 쿼리 없음 (미완료)</div>';
+
+  const completeCard = document.createElement('div');
+  completeCard.className = 'eval-complete-card';
+  completeCard.innerHTML = `
+    <div class="eval-complete-title">🏁 평가 완료 — ${evalCurrent.scenario_id}</div>
+    <div style="display:flex;gap:16px;margin-bottom:12px;font-size:12.5px">
+      <div>실행 턴 <strong>${evalTurnIdx}</strong> / 예상 <strong>${evalCurrent.turn_count}</strong></div>
+      <div>ready_for_rag: <strong>${lastData?.ready_for_rag ? '✅ Yes' : '❌ No'}</strong></div>
+    </div>
+    <div style="font-size:11px;font-weight:600;color:var(--ink-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">RAG 쿼리 비교</div>
+    ${ragHtml}`;
+  area.appendChild(completeCard);
+  completeCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  // 로그 최종화
+  evalLog.completed_at   = new Date().toISOString();
+  evalLog.actual_turns   = evalTurnIdx;
+  evalLog.planned_turns  = evalCurrent.turn_count;
+  evalLog.ready_for_rag  = lastData?.ready_for_rag || false;
+  if (expectedRag) evalLog.final.expected_rag_query = expectedRag;
+  if (actualRag)   evalLog.final.actual_rag_query   = actualRag;
+
+  document.getElementById('eval-download-btn').disabled = false;
+  document.getElementById('eval-start-btn').disabled    = false;
+  document.getElementById('eval-start-btn').textContent = '▶ 다시 실행';
+}
+
+function renderEvalRagCol(label, rag) {
+  if (!rag) return `<div class="eval-rag-col"><div class="lbl">${label}</div><div style="font-size:12px;color:var(--ink-muted)">없음</div></div>`;
+  const rows = [];
+  if (rag.semantic_query)             rows.push(['semantic',    rag.semantic_query]);
+  if (rag.keyword_query?.length)      rows.push(['keywords',    rag.keyword_query.join(', ')]);
+  const filters = rag.filters || {};
+  if (filters.cate_depth1?.length)    rows.push(['cate_depth1', filters.cate_depth1.join(', ')]);
+  if (filters.cate_depth2?.length)    rows.push(['cate_depth2', filters.cate_depth2.join(', ')]);
+  if (filters.custom_constraints?.length) rows.push(['custom',  filters.custom_constraints.join(', ')]);
+  if (filters.target_reader)          rows.push(['target',      Array.isArray(filters.target_reader)?filters.target_reader.join(', '):filters.target_reader]);
+  const c = rag.constraints || {};
+  if (c.page_range?.length)           rows.push(['page',        c.page_range.map(r=>r.value+'p '+r.operator).join(', ')]);
+  if (c.pub_year?.length)             rows.push(['pub_year',    c.pub_year.map(r=>r.value+'년 '+r.operator).join(', ')]);
+  if (c.author_non?.length)           rows.push(['author_non',  c.author_non.join(', ')]);
+  if (rag.anchor?.value)              rows.push(['anchor',      `${rag.anchor.value} (${rag.anchor.type})`]);
+  rows.push(['availability', rag.availability_required?'필수':'없음']);
+  const rh = rows.map(([k,v])=>`<div class="eval-rag-row"><span class="eval-rag-key">${k}</span><span class="eval-rag-val">${escHtml(String(v))}</span></div>`).join('');
+  return `<div class="eval-rag-col"><div class="lbl">${label}</div>${rh}</div>`;
+}
+
+// ── 로그 다운로드 ────────────────────────────────────
+function downloadEvalLog() {
+  if (!evalLog) return;
+  const blob = new Blob([JSON.stringify(evalLog, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `eval_${evalLog.scenario_id}_${Date.now()}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── 평가 초기화 ──────────────────────────────────────
+function resetEval() {
+  evalTurnIdx=0; evalCtx=null; evalHistory=[]; evalPending=[]; evalLog=null; evalState='IDLE';
+  document.getElementById('eval-turns-area').innerHTML = '';
+  document.getElementById('eval-start-btn').disabled   = !document.getElementById('eval-scenario-select').value;
+  document.getElementById('eval-start-btn').textContent = '▶ 시작';
+  document.getElementById('eval-download-btn').disabled = true;
+}
+
+// ════════════════════════════════════════════════════════
+//  온보딩 탐색
+// ════════════════════════════════════════════════════════
+async function loadCategories() {
+  const grid=document.getElementById('cat-grid'), loading=document.getElementById('cat-loading');
+  grid.innerHTML=''; loading.textContent='로드 중…'; loading.style.display='block';
+  try {
+    const r=await fetch(`${apiBase}/api/onboarding/categories`);
+    if(!r.ok) throw new Error(r.status);
+    const data=await r.json(); loading.style.display='none';
+    Object.entries(data).forEach(([coarse,fine_list])=>{
+      const subs=Array.isArray(fine_list)?fine_list:Object.keys(fine_list);
+      const card=document.createElement('div'); card.className='cat-card';
+      card.innerHTML=`<div class="cat-name">${escHtml(coarse)}</div><div class="cat-subs">${subs.slice(0,8).map(s=>`<span class="cat-sub">${escHtml(s)}</span>`).join('')}${subs.length>8?`<span class="cat-sub">+${subs.length-8}</span>`:''}</div>`;
+      grid.appendChild(card);
+    });
+  } catch(e){loading.textContent=`카테고리 로드 실패 (${e.message})`;}
+}
+async function searchBooks() {
+  const q=document.getElementById('book-search-q').value.trim(); if(!q)return;
+  const c=document.getElementById('book-results'); c.innerHTML='<div style="color:var(--ink-muted);font-size:12px;padding:7px 0">검색 중…</div>';
+  try{const r=await fetch(`${apiBase}/api/onboarding/books?q=${encodeURIComponent(q)}`);const d=await r.json();if(!d.length){c.innerHTML='<div style="color:var(--ink-muted);font-size:12px;padding:7px 0">결과 없음</div>';return;}c.innerHTML=d.map(b=>`<div class="search-result-item"><div class="title">${escHtml(b.title)}</div><div class="sub">${escHtml(b.author||'')}</div></div>`).join('');}catch(e){c.innerHTML=`<div style="color:#b91c1c;font-size:12px;padding:7px 0">오류: ${e.message}</div>`;}
+}
+async function searchLibraries() {
+  const q=document.getElementById('lib-search-q').value.trim(); if(!q)return;
+  const c=document.getElementById('lib-results'); c.innerHTML='<div style="color:var(--ink-muted);font-size:12px;padding:7px 0">검색 중…</div>';
+  try{const r=await fetch(`${apiBase}/api/onboarding/libraries?q=${encodeURIComponent(q)}`);const d=await r.json();if(!d.length){c.innerHTML='<div style="color:var(--ink-muted);font-size:12px;padding:7px 0">결과 없음 (API 키 미설정?)</div>';return;}c.innerHTML=d.map(l=>`<div class="search-result-item"><div class="title">${escHtml(l.name)}</div><div class="sub">${escHtml(l.address||'')}</div></div>`).join('');}catch(e){c.innerHTML=`<div style="color:#b91c1c;font-size:12px;padding:7px 0">오류: ${e.message}</div>`;}
+}
+
+// ════════════════════════════════════════════════════════
+//  인증 / 프로필
+// ════════════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  ['login','signup','profile'].forEach(t=>{document.getElementById(`auth-${t}`).style.display=t===tab?'':'none';document.getElementById(`atab-${t}`).classList.toggle('active',t===tab);});
+  if(tab==='profile') loadProfile();
+}
+function showAuthAlert(msg,type='error'){const el=document.getElementById('auth-alert');el.innerHTML=`<div class="alert alert-${type}">${escHtml(msg)}</div>`;setTimeout(()=>{if(el.firstChild)el.innerHTML='';},5000);}
+async function doLogin(){const email=document.getElementById('login-email').value.trim(),pw=document.getElementById('login-pw').value;if(!email||!pw){showAuthAlert('이메일과 비밀번호를 입력하세요.');return;}try{const r=await fetch(`${apiBase}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw})});const data=await r.json();if(!r.ok){showAuthAlert(data.detail||'로그인 실패');return;}authToken=data.token;authUser=data.user;localStorage.setItem('authToken',authToken);localStorage.setItem('authUser',JSON.stringify(authUser));showAuthAlert(`안녕하세요, ${authUser.name}님!`,'success');}catch(e){showAuthAlert('서버 연결 오류');}}
+async function doSignup(){const name=document.getElementById('signup-name').value.trim(),email=document.getElementById('signup-email').value.trim(),pw=document.getElementById('signup-pw').value;let onboarding_data={};const rawJson=document.getElementById('signup-onboarding').value.trim();if(rawJson){try{onboarding_data=JSON.parse(rawJson);}catch{showAuthAlert('온보딩 데이터 JSON 형식 오류');return;}}if(!name||!email||!pw){showAuthAlert('이름, 이메일, 비밀번호를 모두 입력하세요.');return;}try{const r=await fetch(`${apiBase}/api/auth/signup`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password:pw,onboarding_data})});const data=await r.json();if(!r.ok){showAuthAlert(data.detail||'회원가입 실패');return;}authToken=data.token;authUser=data.user;localStorage.setItem('authToken',authToken);localStorage.setItem('authUser',JSON.stringify(authUser));showAuthAlert(`가입 완료! 안녕하세요, ${authUser.name}님 🎉`,'success');}catch(e){showAuthAlert('서버 연결 오류');}}
+async function loadProfile(){const container=document.getElementById('profile-content');if(!authToken){container.innerHTML='<div style="color:var(--ink-muted);font-size:13px">로그인 후 조회할 수 있습니다.</div>';return;}container.innerHTML='<div style="color:var(--ink-muted);font-size:13px">로드 중…</div>';try{const r=await fetch(`${apiBase}/api/profile`,{headers:{'Authorization':`Bearer ${authToken}`}});if(!r.ok)throw new Error(r.status);const data=await r.json();const{user,onboarding_data,feedback_history}=data;container.innerHTML=`<div class="profile-kv"><span class="profile-k">이름</span><span class="profile-v">${escHtml(user.name)}</span></div><div class="profile-kv"><span class="profile-k">이메일</span><span class="profile-v">${escHtml(user.email)}</span></div><div class="profile-kv" style="flex-direction:column;gap:5px"><span class="profile-k">온보딩 데이터</span><pre class="json-pre">${escHtml(JSON.stringify(onboarding_data,null,2))}</pre></div><div class="profile-kv" style="flex-direction:column;gap:5px;margin-top:5px"><span class="profile-k">피드백 이력 (${feedback_history?.length||0}건)</span>${feedback_history?.length?`<pre class="json-pre">${escHtml(JSON.stringify(feedback_history,null,2))}</pre>`:'<span style="font-size:12px;color:var(--ink-muted)">없음</span>'}</div><div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-secondary btn-sm" onclick="loadProfile()">새로고침</button><button class="btn btn-danger btn-sm" onclick="doLogout()">로그아웃</button></div>`;}catch(e){container.innerHTML=`<div style="color:#b91c1c;font-size:13px">로드 실패 (${e.message})</div>`;}}
+function doLogout(){authToken=null;authUser=null;localStorage.removeItem('authToken');localStorage.removeItem('authUser');showAuthAlert('로그아웃됐습니다.','info');loadProfile();}
+
+// ════════════════════════════════════════════════════════
+//  유틸
+// ════════════════════════════════════════════════════════
+function escHtml(str){return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');}
+function escAttr(str){return String(str||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+</script>
+</body>
+</html>

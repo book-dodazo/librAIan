@@ -1,0 +1,1710 @@
+[
+  {
+    "scenario_id": "S01",
+    "query_type": "anchor_based",
+    "user_id": "P001-A",
+    "name": "김지유 (23세, 서울 마포구)",
+    "scenario_type": "book_title anchor + COMPLEX 제약·필터 + comparison_basis 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "COMPLEX",
+    "filter_complexity": "COMPLEX",
+    "boost": "cate_depth2+subject",
+    "edge_case": "comparison_basis",
+    "turn_count": 2,
+    "onboarding": {
+      "preferred_length": "300p 이하",
+      "disliked_keywords": ["tense", "dark", "informative"],
+      "frequent_libraries": ["마포구립서강도서관", "이화여자대학교 도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "소설", "sub": "프랑스소설" },
+        { "main": "인문", "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "지혜롭게 나이 든다는 것처럼 철학적이고 사유하게 만드는 에세이 추천해줘. 300페이지 이하고 2020년 이후에 나온 걸로",
+        "key_signals": ["CAT8_REFERENCE (처럼)", "CAT3_SHORT (300페이지 이하)", "CAT5_TOPIC (에세이, 철학)"],
+        "slot_changes": {
+          "anchor": { "value": "지혜롭게 나이 든다는 것", "type": "book_title" },
+          "topic": { "coarse": ["시/에세이", "인문"], "fine": ["테마에세이", "철학"], "subject": [], "source": "inferred" },
+          "constraints": [
+            { "type": "page_range", "operator": "lte", "value": 300, "raw": "300페이지 이하" },
+            { "type": "pub_year", "operator": "gte", "value": 2020, "raw": "2020년 이후" }
+          ],
+          "comparison_basis": { "dimensions": [], "raw": null, "source": "null" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["comparison_basis"],
+          "reason": "anchor 있으나 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
+        },
+        "system_response": "지혜롭게 나이 든다는 것에서 특히 어떤 점이 마음에 드셨나요?\n[ 철학적 분위기 ] [ 주제·소재 ] [ 문체 ] [ 생각할 거리 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "주제가 비슷한 걸로요. 실존주의적인 느낌으로",
+        "key_signals": ["CAT8_REFERENCE (비슷한)", "CAT5_TOPIC (실존주의)"],
+        "slot_changes": {
+          "comparison_basis": { "dimensions": ["topic"], "raw": "실존주의적인 느낌", "source": "direct" },
+          "topic": { "subject": ["실존주의", "자아성찰"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(topic) + COMPLEX constraints 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "disliked_keywords(tense·dark·informative) 보조 신호 활성. page_range 세션 직접 지정 → length_soft 미사용",
+        "rag_query": {
+          "keyword_query": ["에세이", "실존주의", "철학", "자아성찰"],
+          "semantic_query": "지혜롭게 나이 든다는 것처럼 실존주의적 주제를 다루는 사유하게 만드는 에세이",
+          "filters": {
+            "cate_depth1": ["시/에세이", "인문"],
+            "custom_constraints": ["실존주의", "철학적 성찰"]
+          },
+          "constraints": {
+            "page_range": [{ "operator": "lte", "value": 300 }],
+            "pub_year": [{ "operator": "gte", "value": 2020 }]
+          },
+          "score_boost": { "cate_depth2": ["테마에세이", "철학"], "subject": ["실존주의", "자아성찰"] },
+          "anchor": { "value": "지혜롭게 나이 든다는 것", "type": "book_title" },
+          "session_signals": { "comparison_basis": { "dimensions": ["topic"], "raw": "실존주의적인 느낌" } },
+          "onboarding_signals": {"age": 23, "disliked_keywords": ["tense", "dark", "informative"] }
+        },
+        "system_response": "지혜롭게 나이 든다는 것처럼 실존주의적이고 사유하게 하는 에세이예요.\n1. 『어떻게 살 것인가』 유시민 — 280p (2021)\n2. 『고독을 잃어버린 시간』 알랭 드 보통 역 — 264p (2022)\n3. 『슬픔도 힘이 된다』 에리히 프롬 역 — 276p (2020)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S02",
+    "query_type": "anchor_based",
+    "user_id": "P002-B",
+    "name": "최준혁 (42세, 경기 성남시)",
+    "scenario_type": "author anchor + SIMPLE 제약 + author_non 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2",
+    "edge_case": "author_non",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "350p 이하",
+      "disliked_keywords": ["funny", "lighthearted", "relaxing"],
+      "frequent_libraries": ["성남시립중앙도서관", "경기도사이버도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경영관리" },
+        { "main": "경제/경영", "sub": "마케팅/광고/고객" },
+        { "main": "자기계발", "sub": "비즈니스능력계발" },
+        { "main": "인문", "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "장하준 스타일의 경영 리더십 책 추천해줘. 토머스 블레인 매코믹 책은 다 읽었으니까 빼줘",
+        "key_signals": ["CAT8_REFERENCE (스타일)", "CAT9_AVOID (빼줘)", "CAT5_TOPIC (경영 리더십)"],
+        "slot_changes": {
+          "anchor": { "value": "장하준", "type": "author" },
+          "topic": { "coarse": ["경제/경영"], "fine": ["경영관리"], "subject": ["리더십"], "source": "inferred" },
+          "constraints": [
+            { "type": "author_non", "value": "피터 드러커", "operator": "exclude", "raw": "블레인 매코믹 책 제외" }
+          ]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["purpose_detail"],
+          "reason": "anchor + author_non 채워졌으나 실무용인지 교양인지 목적 불명확"
+        },
+        "system_response": "어떤 목적으로 읽으시나요?\n[ 실무에 바로 활용 ] [ 경영 교양·이론 ] [ 리더십 사례 탐구 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "실무에 바로 써먹을 수 있는 거요",
+        "key_signals": ["CAT2_PRACTICAL (써먹)"],
+        "slot_changes": {
+          "purpose": { "value": "실용", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor(author) + author_non + purpose(실용) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
+        "rag_query": {
+          "keyword_query": ["리더십", "경영관리", "실무", "조직관리"],
+          "semantic_query": "장하준 스타일의 실무에 바로 적용할 수 있는 경영 리더십 책",
+          "filters": { "cate_depth1": ["경제/경영"] },
+          "constraints": { "author_non": ["블레인 매코믹"] },
+          "score_boost": { "cate_depth2": ["경영관리"] },
+          "anchor": { "value": "장하준", "type": "author" },
+          "session_signals": { "purpose": "실용" },
+          "onboarding_signals": {
+            "age": 42,
+            "disliked_keywords": ["funny", "lighthearted", "relaxing"],
+            "page_length_soft": { "operator": "lte", "value": 350 }
+          }
+        },
+        "system_response": "장하준 스타일 실무형 리더십 책이에요. 블레인 매코믹은 제외했어요.\n1. 『팀장의 탄생』 줄리 주오\n2. 『일의 격』 신수정\n3. 『하버드 리더십 수업』 존 코터"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S03",
+    "query_type": "anchor_based",
+    "user_id": "P004-C",
+    "name": "임도현 (17세, 경기 용인시)",
+    "scenario_type": "anchor + COMPLEX 제약 + avoid_mood 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "COMPLEX",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "avoid_mood",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "400p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["용인시립중앙도서관", "용인시립기흥도서관"],
+      "preferred_categories": [
+        { "main": "과학", "sub": "천문학" },
+        { "main": "과학", "sub": "물리학" },
+        { "main": "과학", "sub": "교양과학" },
+        { "main": "소설", "sub": "영미소설" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "엔드 오브 타임처럼 우주 관련 책 추천해줘. 2015년 이후에 나온 거로 400페이지 안쪽으로",
+        "key_signals": ["CAT8_REFERENCE (처럼)", "CAT5_TOPIC (우주·천문학)", "CAT3_SHORT (400페이지 이하)"],
+        "slot_changes": {
+          "anchor": { "value": "엔드 오브 타임", "type": "book_title" },
+          "topic": { "coarse": ["과학"], "fine": ["교양과학"], "subject": ["우주"], "source": "direct" },
+          "constraints": [
+            { "type": "pub_year", "operator": "gte", "value": 2015, "raw": "2015년 이후" },
+            { "type": "page_range", "operator": "lte", "value": 400, "raw": "400페이지 이하" }
+          ]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "분위기 취향 파악 전 — avoid_mood 없음. 과학책 스타일 선호 확인"
+        },
+        "system_response": "어떤 분위기의 과학책을 원하세요?"
+      },
+      {
+        "turn": 2,
+        "user_input": "너무 딱딱하거나 교과서 같은 건 싫어요. 이야기처럼 자연스럽게 읽히는 거요",
+        "key_signals": ["CAT9_AVOID (싫어요)", "CAT4_EASY (자연스럽게 읽히는)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["딱딱한 교과서식", "수식 나열식"], "source": "direct" },
+          "purpose": { "value": "교양", "source": "inferred" },
+          "reading_level": { "value": "medium", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor(series) + COMPLEX constraints + avoid_mood 채워짐 — RAG 진행"
+        },
+        "rag_query": {
+          "keyword_query": ["우주", "교양과학"],
+          "semantic_query": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 교양과학 책",
+          "filters": { "cate_depth1": ["자연/과학"] },
+          "constraints": {
+            "pub_year": [{ "operator": "gte", "value": 2015 }],
+            "page_range": [{ "operator": "lte", "value": 400 }]
+          },
+          "score_boost": {},
+          "anchor": { "value": "엔드 오브 타임", "type": "book_title" },
+          "session_signals": {
+            "purpose": "교양",
+            "reading_level": "medium",
+            "avoid_mood": ["딱딱한 교과서식", "수식 나열식"]
+          },
+          "onboarding_signals": { "age": 17, "page_length_soft": { "operator": "lte", "value": 400 } }
+        },
+        "system_response": "엔드 오브 타임처럼 이야기 형식으로 읽히는 우주 관련 책이 에요."
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S04",
+    "query_type": "topic_purpose",
+    "user_id": "P002-A",
+    "name": "박성훈 (38세, 경기 수원시)",
+    "scenario_type": "topic_purpose + SIMPLE 제약 + target_reader 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2+subject",
+    "edge_case": "target_reader",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "300p 이하",
+      "disliked_keywords": ["emotional", "sad", "mysterious"],
+      "frequent_libraries": ["수원시립중앙도서관", "경기도사이버도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경영전략" },
+        { "main": "경제/경영", "sub": "경영이론" },
+        { "main": "자기계발", "sub": "자기능력계발" },
+        { "main": "인문", "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "경영전략 관련 책 추천해줘. 요즘 팀장이 됐는데 리더십이랑 팀 관리 관련된 거",
+        "key_signals": ["CAT5_TOPIC (경영전략, 리더십)", "CAT2_PRACTICAL (팀장, 팀 관리)"],
+        "slot_changes": {
+          "topic": { "coarse": ["경제/경영"], "fine": ["경영전략", "경영관리"], "subject": ["리더십", "팀관리"], "source": "direct" },
+          "purpose": { "value": "실용", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "target_reader 불명확 — 리더십 책 처음인지 어느 정도인지에 따라 추천 달라짐"
+        },
+        "system_response": "경영·리더십 책을 처음 읽으시나요, 아니면 어느 정도 읽어보셨어요?\n[ 거의 처음 ] [ 몇 권 읽어봄 ] [ 상당히 읽어봄 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "몇 권 읽어봤어요. 팀장은 처음이지만요",
+        "key_signals": [],
+        "slot_changes": {
+          "filters_update": { "target_reader": ["중급", "팀장 입문"] }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic + purpose + target_reader(중급) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "disliked_keywords(emotional·sad·mysterious) 보조 신호 활성. page_length_soft 300p",
+        "rag_query": {
+          "keyword_query": ["리더십", "팀관리", "경영전략", "팀장"],
+          "semantic_query": "팀장이 된 중급 독자를 위한 실무 리더십·팀 관리 책",
+          "filters": {
+            "cate_depth1": ["경제/경영"],
+            "target_reader": ["중급", "팀장 입문"]
+          },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["경영전략", "경영관리"], "subject": ["리더십", "팀관리"] },
+          "session_signals": { "purpose": "실용" },
+          "onboarding_signals": {
+            "age": 38,
+            "disliked_keywords": ["emotional", "sad", "mysterious"],
+            "page_length_soft": { "operator": "lte", "value": 300 }
+          }
+        },
+        "system_response": "팀장 입문자에게 맞는 리더십 책이에요.\n1. 『팀장의 탄생』 줄리 주오\n2. 『하이아웃풋 매니지먼트』 앤디 그로브\n3. 『원온원』 김호준"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S05",
+    "query_type": "topic_purpose",
+    "user_id": "P003-B",
+    "name": "정명희 (63세, 서울 노원구)",
+    "scenario_type": "topic_purpose + COMPLEX 제약·필터 + custom_constraints 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "COMPLEX",
+    "filter_complexity": "COMPLEX",
+    "boost": "cate_depth2",
+    "edge_case": "custom_constraints",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["노원구립도서관", "불암정보도서관"],
+      "preferred_categories": [
+        { "main": "인문", "sub": "인문교양총서" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "역사/문화", "sub": "한국사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "노년기 삶에 대해 생각해볼 수 있는 인문 에세이 추천해줘. 번역서 말고 한국 작가 거로, 250페이지 이하로",
+        "key_signals": ["CAT5_TOPIC (인문, 에세이, 노년)", "CAT9_AVOID (번역서 말고)", "CAT3_SHORT (250페이지 이하)"],
+        "slot_changes": {
+          "topic": { "coarse": ["인문", "시/에세이"], "fine": ["인문교양총서", "테마에세이"], "subject": ["노년", "삶"], "source": "direct" },
+          "purpose": { "value": "교양", "source": "inferred" },
+          "constraints": [
+            { "type": "page_range", "operator": "lte", "value": 250, "raw": "250페이지 이하" },
+            { "type": "nonauthor", "value": "번역서", "operator": "exclude", "raw": "번역서 말고" }
+          ]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "custom_constraints 없음 — 문체·스타일 취향 파악 필요"
+        },
+        "system_response": "어떤 스타일의 에세이를 원하세요?"
+      },
+      {
+        "turn": 2,
+        "user_input": "에세이처럼 가볍게 읽히는 거요. 너무 학문적이지 않게",
+        "key_signals": ["CAT4_EASY (가볍게)"],
+        "slot_changes": {
+          "reading_level": { "value": "easy", "source": "direct" },
+          "filters_update": { "custom_constraints": ["에세이 형식", "쉬운 문체", "비학문적"] }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic + purpose + COMPLEX constraints + COMPLEX filter(custom_constraints) + reading_level 채워짐 — RAG 진행"
+        },
+        "rag_query": {
+          "keyword_query": ["노년", "삶", "인문 에세이", "한국 작가"],
+          "semantic_query": "노년기 삶을 주제로 한 가볍게 읽히는 한국 작가 인문 에세이",
+          "filters": {
+            "cate_depth1": ["인문", "시/에세이"],
+            "custom_constraints": ["에세이 형식", "쉬운 문체", "한국 작가"]
+          },
+          "constraints": {
+            "page_range": [{ "operator": "lte", "value": 250 }],
+            "author_non": ["번역서"]
+          },
+          "score_boost": { "cate_depth2": ["인문교양총서", "테마에세이"] },
+          "session_signals": { "purpose": "교양", "reading_level": "easy" },
+          "onboarding_signals": {"age": 63}
+        },
+        "system_response": "가볍게 읽히는 한국 작가 노년 인문 에세이예요.\n1. 『어떻게 살 것인가』 유시민 (248p)\n2. 『혼자를 기르는 법』 은유 (232p)\n3. 『늙어감에 대하여』 박완서 (244p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S06",
+    "query_type": "topic_purpose",
+    "user_id": "P005-A",
+    "name": "정다은 (29세, 서울 송파구)",
+    "scenario_type": "topic_purpose + topic_uncertainty 엣지 + SIMPLE 제약",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "topic_uncertainty",
+    "turn_count": 3,
+    "onboarding": {
+      
+      "preferred_length": "200p 이하",
+      "disliked_keywords": ["challenging", "dark", "tense", "sad"],
+      "frequent_libraries": ["송파구립도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "자기계발", "sub": "인간관계" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "자기계발 책 읽고 싶은데 뭐가 좋을지 모르겠어요",
+        "key_signals": ["CAT5_TOPIC (자기계발)"],
+        "slot_changes": {
+          "topic": { "coarse": ["자기계발"], "fine": [], "subject": [], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "자기계발은 인간관계/습관/목표설정 등으로 방향이 크게 달라짐" } },
+          "reason": "topic_uncertainty HIGH — 자기계발 세부 방향 불명확"
+        },
+        "onboarding_note": "topic fine 없어 uncertainty HIGH → onboarding preferred_categories['자기계발-인간관계'] 보조 신호 활성",
+        "system_response": "어떤 주제가 도움될 것 같으세요?\n[ 인간관계·소통 ] [ 자기관리·습관 ] [ 목표설정·동기부여 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "친구 관계가 요즘 좀 어렵더라고요. 인간관계 관련된 거요",
+        "key_signals": ["CAT1_NEGATIVE (어렵더라)"],
+        "slot_changes": {
+          "topic": { "coarse": ["자기계발"], "fine": ["인간관계"], "subject": ["인간관계", "소통"], "source": "direct" },
+          "mood": { "categories": ["recovery_comfort"], "raw": "친구 관계가 어렵", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["purpose_detail"],
+          "reason": "topic 좁혀졌으나 위로가 필요한지 실용 방법이 필요한지 확인 필요"
+        },
+        "system_response": "어떤 쪽이 더 필요하세요?\n[ 위로·공감이 되는 거 ] [ 실제로 써먹을 방법 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "우선 위로가 되는 거요",
+        "key_signals": ["CAT1_COMFORT (위로)"],
+        "slot_changes": {
+          "purpose": { "value": "교양", "source": "inferred" },
+          "mood": { "categories": ["recovery_comfort"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(인간관계) + purpose(교양) + mood(위로) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "disliked_keywords(challenging·dark·tense·sad) 강하게 적용. page_length_soft 200p",
+        "rag_query": {
+          "keyword_query": ["인간관계", "위로", "소통", "공감"],
+          "semantic_query": "인간관계가 힘들 때 위로와 공감이 되는 자기계발·에세이",
+          "filters": { "cate_depth1": ["자기계발", "시/에세이"] },
+          "constraints": {},
+          "score_boost": {},
+          "session_signals": { "purpose": "교양", "mood": ["recovery_comfort"] },
+          "onboarding_signals": {
+            "age": 29,
+            "disliked_keywords": ["challenging", "dark", "tense", "sad"],
+            "page_length_soft": { "operator": "lte", "value": 200 }
+          }
+        },
+        "system_response": "인간관계가 힘들 때 위로가 되는 책이에요.\n1. 『당신이 옳다』 정혜신\n2. 『관계의 온도』 허남설\n3. 『나는 나로 살기로 했다』 김수현"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S07",
+    "query_type": "topic_constraint",
+    "user_id": "P002-C",
+    "name": "윤재원 (35세, 서울 강남구)",
+    "scenario_type": "topic_constraint + COMPLEX 제약·필터 + author_non 엣지",
+    "query_specificity": "매우 구체적",
+    "constraints_complexity": "COMPLEX",
+    "filter_complexity": "COMPLEX",
+    "boost": "cate_depth2+subject",
+    "edge_case": "author_non",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["강남구립도서관", "서울시립중부도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경제일반" },
+        { "main": "경제/경영", "sub": "재테크/금융" },
+        { "main": "자기계발", "sub": "성공/처세" },
+        { "main": "역사/문화", "sub": "역사일반" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "재테크·투자 책 추천해줘. 유발 하라리처럼 너무 학문적인 건 말고, 300페이지 이하로, 2020년 이후에 나온 걸로",
+        "key_signals": ["CAT5_TOPIC (재테크·투자)", "CAT9_AVOID (말고)", "CAT3_SHORT (300페이지)", "CAT5_RECENT (2020년 이후)"],
+        "slot_changes": {
+          "topic": { "coarse": ["경제/경영"], "fine": ["재테크/금융"], "subject": ["투자"], "source": "direct" },
+          "purpose": { "value": "실용", "source": "inferred" },
+          "constraints": [
+            { "type": "page_range", "operator": "lte", "value": 300, "raw": "300페이지 이하" },
+            { "type": "pub_year", "operator": "gte", "value": 2020, "raw": "2020년 이후" },
+            { "type": "nonauthor", "value": "유발 하라리 스타일(학문적)", "operator": "exclude", "raw": "유발 하라리처럼 학문적인 건 제외" }
+          ],
+          "filters_update": { "custom_constraints": ["실전적인", "입문 친화적"] }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "투자 세부 분야(주식/부동산/ETF)에 따라 결과가 크게 달라짐"
+        },
+        "system_response": "투자 분야 중 특별히 원하는 게 있으세요?\n[ 주식 ] [ 부동산 ] [ ETF·펀드 ] [ 전반적인 재테크 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "주식이랑 ETF 기초부터 시작하는 거로요",
+        "key_signals": ["CAT4_EASY (기초부터)"],
+        "slot_changes": {
+          "topic": { "subject": ["주식", "ETF", "투자 기초"], "source": "direct" },
+          "reading_level": { "value": "easy", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(재테크/ETF/주식) + COMPLEX constraints + COMPLEX filter(custom) + author_non 채워짐 — RAG 진행"
+        },
+        "rag_query": {
+          "keyword_query": ["주식", "ETF", "투자 기초", "재테크"],
+          "semantic_query": "주식·ETF 기초부터 실전 위주로 쉽게 설명한 재테크 책",
+          "filters": {
+            "cate_depth1": ["경제/경영"],
+            "custom_constraints": ["실전적인", "입문 친화적"]
+          },
+          "constraints": {
+            "page_range": [{ "operator": "lte", "value": 300 }],
+            "pub_year": [{ "operator": "gte", "value": 2020 }],
+            "author_non": ["유발 하라리 스타일(학문적)"]
+          },
+          "score_boost": { "cate_depth2": ["재테크/금융"], "subject": ["주식", "ETF", "투자 기초"] },
+          "session_signals": { "purpose": "실용", "reading_level": "easy" },
+          "onboarding_signals": {"age": 35}
+        },
+        "system_response": "주식·ETF 기초부터 실전 위주로 다루는 책이에요.\n1. 『ETF 투자의 정석』 이은원 (2022, 288p)\n2. 『존리의 부자되기 습관』 존리 (2021, 272p)\n3. 『주식 투자 무작정 따라하기』 윤재수 (2023, 296p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S08",
+    "query_type": "topic_constraint",
+    "user_id": "P004-A",
+    "name": "최민준 (16세, 서울 노원구)",
+    "scenario_type": "book_title anchor + topic_constraint + COMPLEX 제약·필터 + comparison_basis 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "COMPLEX",
+    "filter_complexity": "COMPLEX",
+    "boost": "cate_depth2",
+    "edge_case": "comparison_basis",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "제한 없음",
+      "disliked_keywords": [],
+      "frequent_libraries": ["노원구립도서관", "불암정보도서관"],
+      "preferred_categories": [
+        { "main": "과학", "sub": "교양과학" },
+        { "main": "과학", "sub": "수학" },
+        { "main": "소설", "sub": "장르소설" },
+        { "main": "역사/문화", "sub": "세계사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "하룻밤에 읽는 광개토대왕 같은 역사소설 추천해줘. 세계사 배경이면 좋겠고 청소년도 읽을 수 있는 거로. 400페이지 이하로",
+        "key_signals": ["CAT8_REFERENCE (같은)", "CAT5_TOPIC (역사소설, 세계사)", "CAT3_SHORT (400페이지 이하)"],
+        "slot_changes": {
+          "anchor": { "value": "하룻밤에 읽는 광개토대왕", "type": "book_title" },
+          "topic": { "coarse": ["소설"], "fine": ["장르소설"], "subject": ["역사소설", "한국사"], "source": "direct" },
+          "constraints": [
+            { "type": "page_range", "operator": "lte", "value": 400, "raw": "400페이지 이하" },
+            { "type": "target_reader", "value": "청소년 이상", "operator": "eq", "raw": "청소년도 읽을 수 있는" }
+          ],
+          "filters_update": { "target_reader": ["청소년 이상"] },
+          "comparison_basis": { "dimensions": [], "raw": null, "source": "null" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["comparison_basis"],
+          "reason": "anchor 있으나 하룻밤에 읽는 광개토대왕의 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
+        },
+        "system_response": "하룻밤에 읽는 광개토대왕에서 특히 어떤 점이 좋으셨나요?\n[ 역사적 배경 ] [ 인물들의 이야기 ] [ 가족 서사 ] [ 감동적인 장면들 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "역사 속에서 인물들이 살아가는 이야기요. 인물에 집중한 거",
+        "key_signals": ["CAT5_TOPIC (인물 중심 역사 서사)"],
+        "slot_changes": {
+          "comparison_basis": { "dimensions": ["topic", "mood"], "raw": "인물 중심 역사 서사", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(topic·mood) + COMPLEX constraints + target_reader 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "preferred_length 제한없음 → page_length_soft 없음. onboarding 장르소설·한국사 선호 일치",
+        "rag_query": {
+          "keyword_query": ["역사소설", "한국사", "인물", "청소년"],
+          "semantic_query": "하룻밤에 읽는 광개토대왕처럼 역사 속 인물들의 삶을 다룬 세계사 배경 역사소설",
+          "filters": {
+            "cate_depth1": ["소설"],
+            "target_reader": ["청소년 이상"]
+          },
+          "constraints": {
+            "page_range": [{ "operator": "lte", "value": 400 }]
+          },
+          "score_boost": { "cate_depth2": ["장르소설"] },
+          "anchor": { "value": "하룻밤에 읽는 광개토대왕", "type": "book_title" },
+          "session_signals": {
+            "comparison_basis": { "dimensions": ["topic", "mood"], "raw": "인물 중심 역사 서사" }
+          },
+          "onboarding_signals": {"age": 16}
+        },
+        "system_response": "하룻밤에 읽는 광개토대왕처럼 역사 속 인물들의 삶에 집중한 역사소설이에요.\n1. 『천 개의 찬란한 태양』 할레드 호세이니 (372p)\n2. 『뿌리』 알렉스 헤일리 (396p)\n3. 『링컨 고속도로』 에이모 토울스 (384p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S09",
+    "query_type": "topic_constraint",
+    "user_id": "P001-C",
+    "name": "오세연 (25세, 서울 용산구)",
+    "scenario_type": "topic_constraint + SIMPLE 제약 + avoid_mood 엣지",
+    "query_specificity": "구체적",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "avoid_mood",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "300p",
+      "disliked_keywords": [],
+      "frequent_libraries": ["용산구립중앙도서관", "국립중앙도서관"],
+      "preferred_categories": [
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "소설", "sub": "일본소설" },
+        { "main": "시/에세이", "sub": "인물/자전적에세이" },
+        { "main": "정치/사회", "sub": "사회문제/복지" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "여성 서사 담긴 한국소설 추천해줘. 300페이지 이하로",
+        "key_signals": ["CAT5_TOPIC (여성 서사, 한국소설)", "CAT3_SHORT (300페이지 이하)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": ["여성서사", "여성"], "source": "direct" },
+          "purpose": { "value": "재미", "source": "inferred" },
+          "constraints": [
+            { "type": "page_range", "operator": "lte", "value": 300, "raw": "300페이지 이하" }
+          ]
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "avoid_mood 없음 — 원하는 분위기·피하고 싶은 분위기 파악하면 더 정확한 추천 가능"
+        },
+        "system_response": "어떤 분위기의 소설을 원하세요?"
+      },
+      {
+        "turn": 2,
+        "user_input": "너무 무겁거나 우울한 건 좀 힘들 것 같아요. 공감은 되면서 힘이 되는 거로",
+        "key_signals": ["CAT9_AVOID (힘들)", "CAT1_COMFORT (힘이 되는)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["너무 무거운", "우울한"], "source": "direct" },
+          "mood": { "categories": ["recovery_comfort"], "raw": "힘이 되는", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic + SIMPLE constraint + avoid_mood 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "page_range 세션 직접 지정 → length_soft 미사용",
+        "rag_query": {
+          "keyword_query": ["한국소설", "여성서사", "공감", "위로"],
+          "semantic_query": "공감되면서 힘이 되는 여성 서사 한국소설, 무겁지 않고 우울하지 않은",
+          "filters": { "cate_depth1": ["소설"] },
+          "constraints": {
+            "page_range": [{ "operator": "lte", "value": 300 }]
+          },
+          "score_boost": {},
+          "session_signals": {
+            "mood": ["recovery_comfort"],
+            "avoid_mood": ["너무 무거운", "우울한"]
+          },
+          "onboarding_signals": {"age": 25}
+        },
+        "system_response": "공감되면서 힘이 나는 여성 서사 한국소설이에요.\n1. 『나는 나로 살기로 했다』 김수현 (288p)\n2. 『어서 오세요, 휴남동 서점입니다』 황보름 (276p)\n3. 『빛의 호위』 김연수 (292p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S10",
+    "query_type": "pure_topic",
+    "user_id": "P003-A",
+    "name": "이순자 (67세, 서울 은평구)",
+    "scenario_type": "pure_topic + topic_uncertainty 엣지 + cate_depth2+subject boost",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2+subject",
+    "edge_case": "topic_uncertainty",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "250p",
+      "disliked_keywords": ["dark", "tense", "challenging"],
+      "frequent_libraries": ["은평구립도서관", "서울시립은평도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "인물/자전적에세이" },
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "인문", "sub": "인문교양총서" },
+        { "main": "소설", "sub": "한국소설" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "에세이",
+        "key_signals": ["CAT5_FORMAT (에세이)"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": [], "subject": [], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "에세이는 주제에 따라 자전적/일상/건강/노년 등 방향이 달라짐" } },
+          "reason": "topic_uncertainty HIGH — 에세이 세부 주제·방향 불명확"
+        },
+        "onboarding_note": "topic fine 없어 uncertainty HIGH → onboarding preferred_categories 보조 신호 활성: ['인물/자전적에세이', '건강일반', '한국소설']",
+        "system_response": "에세이 중에서 어떤 주제가 마음에 드세요?\n[ 삶의 이야기·자전적인 거 ] [ 건강·일상 ] [ 따뜻한 노년 이야기 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "나이 들면서 어떻게 살아야 하나, 그런 이야기요",
+        "key_signals": ["CAT5_TOPIC (노년, 삶)"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": ["인물/자전적에세이", "테마에세이"], "subject": ["노년", "삶의 의미"], "source": "direct" },
+          "purpose": { "value": "교양", "source": "inferred" },
+          "reading_level": { "value": "easy", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(노년·삶) + purpose(교양) + reading_level(easy, 67세 inferred) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "topic 채워짐 → topic uncertainty LOW. disliked_keywords(dark·tense·challenging) 보조 신호 유지. length_soft 250p",
+        "rag_query": {
+          "keyword_query": ["에세이", "노년", "삶의 의미", "위로"],
+          "semantic_query": "나이 들면서 어떻게 살아야 할지 생각하게 하는 따뜻한 에세이",
+          "filters": { "cate_depth1": ["시/에세이"] },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["인물/자전적에세이", "테마에세이"], "subject": ["노년", "삶의 의미"] },
+          "session_signals": { "purpose": "교양", "reading_level": "easy" },
+          "onboarding_signals": {
+            "age": 67,
+            "disliked_keywords": ["dark", "tense", "challenging"],
+            "page_length_soft": { "operator": "around", "value": 250 }
+          }
+        },
+        "system_response": "나이 들면서의 삶을 다룬 따뜻한 에세이예요.\n1. 『나는 죽을 때까지 재미있게 살고 싶다』 야마구치 히로코 (224p)\n2. 『어떻게 살 것인가』 유시민 (248p)\n3. 『늙어감에 대하여』 박완서 (236p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S11",
+    "query_type": "pure_topic",
+    "user_id": "P005-B",
+    "name": "강태민 (33세, 서울 관악구)",
+    "scenario_type": "pure_topic + avoid_mood 엣지 + 3턴 좁히기",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "avoid_mood",
+    "turn_count": 3,
+    "onboarding": {
+      
+      "preferred_length": "250p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["관악구립도서관", "서울대학교 중앙도서관"],
+      "preferred_categories": [
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "자기계발", "sub": "인간관계" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "소설",
+        "key_signals": ["CAT5_FORMAT (소설)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설"], "fine": [], "subject": [], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "slot_revisions": { "topic": { "action": "narrow", "hint": "소설은 한국/일본/영미/장르 등 방향이 완전히 달라짐" } },
+          "reason": "topic_uncertainty HIGH — 소설 세부 방향 불명확"
+        },
+        "system_response": "어떤 소설이 좋으세요?\n[ 한국소설 ] [ 일본소설 ] [ 영미소설 ] [ 장르소설 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "한국소설요. 요즘 청춘 이야기 같은 거 읽고 싶어요",
+        "key_signals": ["CAT5_TOPIC (한국소설, 청춘)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": ["청춘", "성장"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "avoid_mood 없음 — 분위기 취향 확인 필요"
+        },
+        "system_response": "분위기는 어떤 걸 원하세요?"
+      },
+      {
+        "turn": 3,
+        "user_input": "너무 슬프거나 비극적인 건 싫어요. 가볍게 읽힐 수 있는 거",
+        "key_signals": ["CAT9_AVOID (싫어요)", "CAT4_EASY (가볍게)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["슬픈", "비극적인"], "source": "direct" },
+          "reading_level": { "value": "easy", "source": "direct" },
+          "purpose": { "value": "재미", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(청춘 한국소설) + purpose(재미) + reading_level + avoid_mood 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "page_length_soft 250p 이하 약한 신호",
+        "rag_query": {
+          "keyword_query": ["한국소설", "청춘", "성장", "가볍게"],
+          "semantic_query": "슬프지 않고 가볍게 읽히는 청춘·성장 한국소설",
+          "filters": { "cate_depth1": ["소설"] },
+          "constraints": {},
+          "score_boost": {},
+          "session_signals": {
+            "purpose": "재미",
+            "reading_level": "easy",
+            "avoid_mood": ["슬픈", "비극적인"]
+          },
+          "onboarding_signals": { "age": 33, "page_length_soft": { "operator": "lte", "value": 250 } }
+        },
+        "system_response": "가볍게 읽히는 청춘·성장 한국소설이에요.\n1. 『아몬드』 손원평 (264p)\n2. 『소년을 읽다』 김중혁 (248p)\n3. 『어서 오세요, 휴남동 서점입니다』 황보름 (276p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S12",
+    "query_type": "pure_topic",
+    "user_id": "P001-B",
+    "name": "이하린 (21세, 서울 서대문구)",
+    "scenario_type": "pure_topic + COMPLEX 필터 + custom_constraints 엣지",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "COMPLEX",
+    "boost": "cate_depth2",
+    "edge_case": "custom_constraints",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "250p 이하",
+      "disliked_keywords": ["challenging", "tense", "adventurous"],
+      "frequent_libraries": ["서대문구립이진아기념도서관", "연세대학교 학술정보원"],
+      "preferred_categories": [
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "나라별 에세이" },
+        { "main": "시/에세이", "sub": "한국시" },
+        { "main": "인문", "sub": "문학이론" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "시",
+        "key_signals": ["CAT5_FORMAT (시)"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": [], "subject": [], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "topic_uncertainty HIGH — 시는 한국/외국/시대별로 방향이 완전히 달라짐"
+        },
+        "onboarding_note": "uncertainty HIGH → onboarding preferred_categories['한국시', '나라별 에세이'] 보조 신호 활성",
+        "system_response": "시 중에서 어떤 스타일을 좋아하세요?\n[ 한국 현대시 ] [ 외국 시집 ] [ 특정 시인의 작품 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "한국 현대시요. 여성 시인 작품이면 더 좋겠어요",
+        "key_signals": ["CAT5_TOPIC (한국 현대시, 여성 시인)"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": ["한국시"], "subject": ["한국 현대시", "여성시인"], "source": "direct" },
+          "filters_update": { "custom_constraints": ["여성 시인 작품"] },
+          "purpose": { "value": "교양", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(한국 현대시) + COMPLEX filter(custom: 여성 시인) + purpose(교양) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "disliked_keywords(challenging·tense·adventurous) 보조 신호 활성. page_length_soft 250p",
+        "rag_query": {
+          "keyword_query": ["한국시", "현대시", "여성시인"],
+          "semantic_query": "한국 여성 시인의 현대시 작품집",
+          "filters": {
+            "cate_depth1": ["시/에세이"],
+            "custom_constraints": ["여성 시인 작품"]
+          },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["한국시"] },
+          "session_signals": { "purpose": "교양" },
+          "onboarding_signals": {
+            "age": 21,
+            "disliked_keywords": ["challenging", "tense", "adventurous"],
+            "page_length_soft": { "operator": "lte", "value": 250 }
+          }
+        },
+        "system_response": "한국 여성 시인의 현대시 작품집이에요.\n1. 『나는 무너지지 않기로 했다』 최영미\n2. 『정희성 시집』 정희성\n3. 『너에게 가려고 강을 만들었다』 한강"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S13",
+    "query_type": "pure_mood_state",
+    "user_id": "P005-C",
+    "name": "백수진 (27세, 경기 부천시)",
+    "scenario_type": "pure_mood_state + avoid_mood 엣지",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "avoid_mood",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["부천시립복사골도서관", "부천시립상동도서관"],
+      "preferred_categories": [
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "자기계발", "sub": "자기능력계발" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "요즘 직장 스트레스가 너무 심해서 책이라도 읽어볼까 해요",
+        "key_signals": ["CAT1_NEGATIVE (스트레스, 심해)", "CAT1_STRESSED"],
+        "slot_changes": {
+          "mood": { "categories": ["negative_stressed"], "raw": "직장 스트레스가 너무 심해", "source": "direct" },
+          "topic": null,
+          "purpose": null
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "mood 명확하나 topic 전혀 없음 — 장르 없이 RAG 진행 시 품질 저하"
+        },
+        "onboarding_note": "topic 미채움 → onboarding preferred_categories 보조 신호 활성: ['소설', '시/에세이', '자기계발']",
+        "system_response": "어떤 책이 도움이 될 것 같으세요?\n[ 가볍게 현실 도피하는 소설 ] [ 위로가 되는 에세이 ] [ 힐링 자기계발 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "소설로 다른 세상에 잠깐 빠지고 싶어요. 근데 너무 무거운 건 부담스러워요",
+        "key_signals": ["CAT5_FORMAT (소설)", "CAT1_ESCAPE (도피)", "CAT9_AVOID (부담스러워)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": [], "source": "inferred" },
+          "mood": { "categories": ["negative_stressed", "recovery_escape"], "source": "direct" },
+          "avoid_mood": { "keywords": ["너무 무거운", "현실적인"], "source": "direct" },
+          "purpose": { "value": "재미", "source": "inferred" },
+          "reading_level": { "value": "easy", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "mood + topic + purpose + avoid_mood 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "topic 채워짐 → topic uncertainty LOW. page_length_soft 300p 약한 신호",
+        "rag_query": {
+          "keyword_query": ["소설", "현실도피", "가볍게", "힐링"],
+          "semantic_query": "스트레스 받을 때 다른 세상에 빠져들 수 있는 가볍고 따뜻한 한국소설",
+          "filters": { "cate_depth1": ["소설"] },
+          "constraints": {},
+          "score_boost": {},
+          "session_signals": {
+            "mood": ["negative_stressed", "recovery_escape"],
+            "purpose": "재미",
+            "reading_level": "easy",
+            "avoid_mood": ["너무 무거운", "현실적인"]
+          },
+          "onboarding_signals": {"age": 27, "page_length_soft": { "operator": "lte", "value": 300 } }
+        },
+        "system_response": "스트레스 받을 때 빠져들기 좋은 가벼운 소설이에요.\n1. 『불편한 편의점』 김호연\n2. 『어서 오세요, 휴남동 서점입니다』 황보름\n3. 『달러구트 꿈 백화점』 이미예"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S14",
+    "query_type": "pure_mood_state",
+    "user_id": "P003-C",
+    "name": "한복순 (71세, 경기 고양시)",
+    "scenario_type": "pure_mood_state + topic_uncertainty 엣지 + cate_depth2 boost",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2",
+    "edge_case": "topic_uncertainty",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "200p 이하",
+      "disliked_keywords": ["dark", "adventurous", "mysterious", "tense"],
+      "frequent_libraries": ["고양시립중앙도서관", "고양시립화정도서관"],
+      "preferred_categories": [
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "건강", "sub": "자연건강" },
+        { "main": "시/에세이", "sub": "인물/자전적에세이" },
+        { "main": "종교", "sub": "불교" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "요즘 마음이 좀 허전하고 외로운 것 같아요",
+        "key_signals": ["CAT1_NEGATIVE (허전하고 외로운)", "CAT1_EMPTY"],
+        "slot_changes": {
+          "mood": { "categories": ["negative_empty", "recovery_comfort"], "raw": "허전하고 외로운", "source": "direct" },
+          "topic": null
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "mood 명확하나 topic_uncertainty VERY HIGH — 장르·방향 없이 RAG 불가"
+        },
+        "onboarding_note": "topic 미채움 → onboarding 전체 보조 신호 활성: ['건강일반', '자연건강', '인물/자전적에세이', '불교']",
+        "system_response": "어떤 책이 위로가 될 것 같으세요?\n[ 따뜻한 에세이 ] [ 불교·명상 관련 ] [ 노년의 삶 이야기 ] [ 건강·자연 관련 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "불교 관련이나 나이 드신 분들 삶 이야기 담긴 에세이가 좋겠어요",
+        "key_signals": ["CAT5_TOPIC (불교, 에세이, 노년)"],
+        "slot_changes": {
+          "topic": { "coarse": ["종교", "시/에세이"], "fine": ["불교", "인물/자전적에세이"], "subject": ["명상", "노년의 삶"], "source": "direct" },
+          "purpose": { "value": "교양", "source": "inferred" },
+          "reading_level": { "value": "easy", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "mood + topic(불교·노년 에세이) + purpose + reading_level 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "topic 채워짐 → topic uncertainty LOW. disliked_keywords(dark·adventurous·mysterious·tense) 강하게 적용. page_length_soft 200p",
+        "rag_query": {
+          "keyword_query": ["불교", "명상", "노년", "에세이"],
+          "semantic_query": "허전하고 외로울 때 위로가 되는 불교·명상 또는 노년의 삶을 담은 에세이",
+          "filters": { "cate_depth1": ["종교", "시/에세이"] },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["불교", "인물/자전적에세이"] },
+          "session_signals": {
+            "mood": ["negative_empty", "recovery_comfort"],
+            "purpose": "교양",
+            "reading_level": "easy"
+          },
+          "onboarding_signals": {
+            "age": 71,
+            "disliked_keywords": ["dark", "adventurous", "mysterious", "tense"],
+            "page_length_soft": { "operator": "lte", "value": 200 }
+          }
+        },
+        "system_response": "외롭고 허전할 때 위로가 되는 책이에요.\n1. 『마음을 비우면 하늘이 보인다』 법정 (188p)\n2. 『나는 죽을 때까지 재미있게 살고 싶다』 야마구치 히로코 (196p)\n3. 『늙어감에 대하여』 박완서 (180p)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S15",
+    "query_type": "pure_mood_state",
+    "user_id": "P002-B",
+    "name": "최준혁 (42세, 경기 성남시)",
+    "scenario_type": "book_title anchor + pure_mood_state + comparison_basis 엣지",
+    "query_specificity": "중간",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2+subject",
+    "edge_case": "comparison_basis",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "350p 이하",
+      "disliked_keywords": ["funny", "lighthearted", "relaxing"],
+      "frequent_libraries": ["성남시립중앙도서관", "경기도사이버도서관"],
+      "preferred_categories": [
+        { "main": "경제/경영", "sub": "경영관리" },
+        { "main": "경제/경영", "sub": "마케팅/광고/고객" },
+        { "main": "자기계발", "sub": "비즈니스능력계발" },
+        { "main": "인문", "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "생각에 관한 생각처럼 생각하게 만드는 책 없어? 요즘 좀 무기력해서",
+        "key_signals": ["CAT8_REFERENCE (처럼)", "CAT1_NEGATIVE (무기력)", "CAT1_PASSIVE"],
+        "slot_changes": {
+          "anchor": { "value": "생각에 관한 생각", "type": "book_title" },
+          "mood": { "categories": ["negative_passive"], "raw": "요즘 좀 무기력해서", "source": "direct" },
+          "comparison_basis": { "dimensions": [], "raw": null, "source": "null" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["comparison_basis"],
+          "reason": "anchor 있으나 생각에 관한 생각의 어떤 점에서 비슷한 책을 원하는지 기준 불명확"
+        },
+        "system_response": "생각에 관한 생각에서 특히 어떤 점이 좋으셨나요?\n[ 행동경제학 통찰 ] [ 실생활 적용 가능성 ] [ 읽기 쉬운 점 ] [ 주제·소재 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "일상에서 바로 적용할 수 있는 심리·행동 인사이트요",
+        "key_signals": ["CAT2_PRACTICAL (바로 적용)", "CAT5_TOPIC (심리·행동)"],
+        "slot_changes": {
+          "comparison_basis": { "dimensions": ["topic"], "raw": "실용적인 심리·행동 인사이트", "source": "direct" },
+          "topic": { "coarse": ["인문"], "fine": ["심리학"], "subject": [ "심리", "습관"], "source": "inferred" },
+          "purpose": { "value": "실용", "source": "inferred" },
+          "mood": { "categories": ["negative_passive", "recovery_meaning"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor + comparison_basis(topic) + mood + topic + purpose 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "disliked_keywords(funny·lighthearted·relaxing) 보조 신호 활성. page_length_soft 350p",
+        "rag_query": {
+          "keyword_query": ["심리", "습관", "실용"],
+          "semantic_query": "생각에 관한 생각처럼 일상에서 바로 적용할 수 있는 심리·행동경제학 책, 무기력할 때 동기부여가 되는",
+          "filters": { "cate_depth1": ["인문"] },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["심리학"], "subject": ["습관"] },
+          "anchor": { "value": "생각에 관한 생각", "type": "book_title" },
+          "session_signals": {
+            "mood": ["negative_passive", "recovery_meaning"],
+            "purpose": "실용",
+            "comparison_basis": { "dimensions": ["topic"], "raw": "실용적인 심리·행동 인사이트" }
+          },
+          "onboarding_signals": {
+            "age": 42,
+            "disliked_keywords": ["funny", "lighthearted", "relaxing"],
+            "page_length_soft": { "operator": "lte", "value": 350 }
+          }
+        },
+        "system_response": "생각에 관한 생각처럼 실용적인 심리·행동경제학 책이에요.\n1. 『생각에 관한 생각』 대니얼 카너먼\n2. 『습관의 힘』 찰스 두히그\n3. 『선택의 역설』 배리 슈워츠"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S16",
+    "query_type": "availability_first",
+    "user_id": "P001-A",
+    "name": "김지유 (23세, 서울 마포구)",
+    "scenario_type": "availability_first + SIMPLE 제약 + 엣지케이스 없음",
+    "query_specificity": "구체적",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2+subject",
+    "edge_case": null,
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "300p 이하",
+      "disliked_keywords": ["tense", "dark", "informative"],
+      "frequent_libraries": ["마포구립서강도서관", "이화여자대학교 도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "소설", "sub": "프랑스소설" },
+        { "main": "인문", "sub": "심리학" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "마포구립서강도서관에서 지금 바로 빌릴 수 있는 한국소설 추천해줘",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (마포구립서강도서관)", "CAT5_TOPIC (한국소설)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설"], "fine": ["한국소설"], "subject": [], "source": "direct" },
+          "location": { "library": "마포구립서강도서관", "source": "direct" },
+          "availability_required": true
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "availability + topic 있으나 세부 취향(분위기/주제) 확인하면 더 정확한 추천 가능"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 신호 활성",
+        "system_response": "어떤 분위기의 소설을 찾으세요?\n[ 따뜻한 힐링 ] [ 가볍고 일상적인 ] [ 감동·성장 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "가볍게 읽힐 수 있는 일상 이야기요",
+        "key_signals": ["CAT4_EASY (가볍게)", "CAT5_TOPIC (일상)"],
+        "slot_changes": {
+          "purpose": { "value": "재미", "source": "inferred" },
+          "reading_level": { "value": "easy", "source": "direct" },
+          "topic": { "subject": ["일상", "힐링"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic + purpose + reading_level + availability + location 모두 채워짐 — RAG + 도서관 API 진행"
+        },
+        "rag_query": {
+          "keyword_query": ["한국소설", "일상", "힐링", "가볍게"],
+          "semantic_query": "가볍게 읽히는 일상적인 한국소설",
+          "filters": { "cate_depth1": ["소설"] },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["한국소설"], "subject": ["일상", "힐링"] },
+          "availability_required": true,
+          "session_signals": {
+            "purpose": "재미",
+            "reading_level": "easy",
+            "location": { "library": "마포구립서강도서관" }
+          },
+          "onboarding_signals": {
+            "age": 23,
+            "disliked_keywords": ["tense", "dark", "informative"],
+            "page_length_soft": { "operator": "lte", "value": 300 },
+            "frequent_libraries": ["마포구립서강도서관", "이화여자대학교 도서관"]
+          }
+        },
+        "system_response": "마포구립서강도서관에서 빌릴 수 있는 가벼운 한국소설이에요.\n1. 『불편한 편의점』 김호연 — 대출 가능\n2. 『어서 오세요, 휴남동 서점입니다』 황보름 — 대출 가능\n3. 『오늘의 운세』 구병모 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S17",
+    "query_type": "availability_first",
+    "user_id": "P004-B",
+    "name": "장서윤 (15세, 서울 강동구)",
+    "scenario_type": "author anchor + availability_first + COMPLEX 제약·필터 + author_non 엣지",
+    "query_specificity": "매우 구체적",
+    "constraints_complexity": "COMPLEX",
+    "filter_complexity": "COMPLEX",
+    "boost": "cate_depth2",
+    "edge_case": "author_non",
+    "turn_count": 2,
+    "onboarding": {
+      
+      "preferred_length": "350p 이하",
+      "disliked_keywords": ["dark", "sad", "tense"],
+      "frequent_libraries": ["강동구립도서관", "강일도서관"],
+      "preferred_categories": [
+        { "main": "소설", "sub": "장르소설" },
+        { "main": "청소년", "sub": "청소년 소설" },
+        { "main": "과학", "sub": "교양과학" },
+        { "main": "역사/문화", "sub": "세계사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "손원평 작가처럼 청소년 소설 강동구립도서관에서 빌릴 수 있는 거 있어? 아몬드랑 달러구트는 읽었으니까 빼줘",
+        "key_signals": ["CAT8_REFERENCE (처럼)", "CAT6_AVAIL (빌릴)", "CAT7_LOCATION (강동구립도서관)", "CAT9_AVOID (빼줘)"],
+        "slot_changes": {
+          "anchor": { "value": "손원평", "type": "author" },
+          "topic": { "coarse": ["소설", "청소년"], "fine": ["청소년 소설", "장르소설"], "subject": ["청소년", "성장"], "source": "inferred" },
+          "location": { "library": "강동구립도서관", "source": "direct" },
+          "availability_required": true,
+          "constraints": [
+            { "type": "page_range", "operator": "lte", "value": 350, "raw": "onboarding 350p 이하" },
+            { "type": "nonauthor", "value": "아몬드", "operator": "exclude", "raw": "아몬드 빼줘" },
+            { "type": "nonauthor", "value": "달러구트 꿈 백화점", "operator": "exclude", "raw": "달러구트는 읽었으니까 빼줘" }
+          ],
+          "filters_update": { "target_reader": ["청소년"] }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "분위기 취향 확인하면 더 정확 — avoid_mood 없음"
+        },
+        "onboarding_note": "availability_required=true → frequent_libraries 신호 활성",
+        "system_response": "어떤 분위기의 소설이 좋으세요?\n[ 따뜻하고 감동적인 ] [ 흥미진진한 판타지·모험 ] [ 일상·성장 이야기 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "따뜻하고 감동적인 거요. 너무 어둡거나 슬픈 건 싫어요",
+        "key_signals": ["CAT9_AVOID (싫어요)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["어두운", "슬픈"], "source": "direct" },
+          "purpose": { "value": "재미", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "anchor(author) + COMPLEX constraints + COMPLEX filter(target_reader) + availability + avoid_mood 채워짐 — RAG + 도서관 API 진행"
+        },
+        "onboarding_note": "disliked_keywords(dark·sad·tense) 온보딩 신호와 avoid_mood 세션 신호 일치 → 더 강하게 적용",
+        "rag_query": {
+          "keyword_query": ["청소년 소설", "성장", "따뜻한", "감동"],
+          "semantic_query": "손원평 작가처럼 따뜻하고 감동적인 청소년 소설",
+          "filters": {
+            "cate_depth1": ["소설", "청소년"],
+            "target_reader": ["청소년"]
+          },
+          "constraints": {
+            "page_range": [{ "operator": "lte", "value": 350 }],
+            "author_non": ["아몬드", "달러구트 꿈 백화점"]
+          },
+          "score_boost": { "cate_depth2": ["청소년 소설"] },
+          "anchor": { "value": "손원평", "type": "author" },
+          "availability_required": true,
+          "session_signals": {
+            "purpose": "재미",
+            "avoid_mood": ["어두운", "슬픈"],
+            "location": { "library": "강동구립도서관" }
+          },
+          "onboarding_signals": {
+            "age": 15,
+            "disliked_keywords": ["dark", "sad", "tense"],
+            "page_length_soft": { "operator": "lte", "value": 350 },
+            "frequent_libraries": ["강동구립도서관", "강일도서관"]
+          }
+        },
+        "system_response": "강동구립도서관에서 빌릴 수 있는 따뜻한 청소년 소설이에요.\n1. 『82년생 김지영』 조남주 — 대출 가능\n2. 『완전한 행복』 정유정 — 대출 가능\n3. 『보건교사 안은영』 정세랑 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S18",
+    "query_type": "availability_first",
+    "user_id": "P005-A",
+    "name": "정다은 (29세, 서울 송파구)",
+    "scenario_type": "availability_first + topic_uncertainty 엣지 + 3턴 좁히기",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "topic_uncertainty",
+    "turn_count": 3,
+    "onboarding": {
+      
+      "preferred_length": "200p 이하",
+      "disliked_keywords": ["challenging", "dark", "tense", "sad"],
+      "frequent_libraries": ["송파구립도서관"],
+      "preferred_categories": [
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "자기계발", "sub": "인간관계" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "송파구립도서관에서 빌릴 수 있는 책 추천해줘",
+        "key_signals": ["CAT6_AVAIL (빌릴)", "CAT7_LOCATION (송파구립도서관)"],
+        "slot_changes": {
+          "location": { "library": "송파구립도서관", "source": "direct" },
+          "availability_required": true,
+          "topic": null
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "availability + location 채워졌으나 topic_uncertainty VERY HIGH — 장르 없이 RAG 불가"
+        },
+        "onboarding_note": "topic 전혀 없음 → onboarding 전체 보조 신호 활성: ['시/에세이', '건강', '자기계발']. frequent_libraries 활성",
+        "system_response": "어떤 종류의 책을 원하세요?\n[ 힐링 에세이 ] [ 자기계발 ] [ 소설 ] [ 건강·생활 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "힐링 에세이요",
+        "key_signals": ["CAT5_FORMAT (에세이)", "CAT1_COMFORT (힐링)"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이"], "fine": ["테마에세이"], "subject": [], "source": "direct" },
+          "mood": { "categories": ["recovery_relax"], "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "에세이 방향 잡혔으나 주제(일상/여행/관계 등) 확인하면 더 정확한 추천 가능"
+        },
+        "system_response": "특별히 어떤 주제가 마음에 드세요?\n[ 일상·소소한 이야기 ] [ 자연·여행 ] [ 관계·감성 ] [ 특별한 주제 없이 읽히는 거 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "일상적인 거요. 특별한 주제 없어도 읽히는 거",
+        "key_signals": ["CAT5_TOPIC (일상)"],
+        "slot_changes": {
+          "topic": { "subject": ["일상", "힐링"], "source": "direct" },
+          "purpose": { "value": "교양", "source": "inferred" },
+          "reading_level": { "value": "easy", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(힐링 에세이·일상) + purpose + availability + location 채워짐 — RAG + 도서관 API 진행"
+        },
+        "onboarding_note": "disliked_keywords(challenging·dark·tense·sad) 강하게 적용. page_length_soft 200p",
+        "rag_query": {
+          "keyword_query": ["에세이", "일상", "힐링", "가볍게"],
+          "semantic_query": "일상적이고 가볍게 읽히는 힐링 에세이",
+          "filters": { "cate_depth1": ["시/에세이"] },
+          "constraints": {},
+          "score_boost": {},
+          "availability_required": true,
+          "session_signals": {
+            "mood": ["recovery_relax"],
+            "purpose": "교양",
+            "reading_level": "easy",
+            "location": { "library": "송파구립도서관" }
+          },
+          "onboarding_signals": {
+            "age": 29,
+            "disliked_keywords": ["challenging", "dark", "tense", "sad"],
+            "page_length_soft": { "operator": "lte", "value": 200 },
+            "frequent_libraries": ["송파구립도서관"]
+          }
+        },
+        "system_response": "송파구립도서관에서 빌릴 수 있는 일상 힐링 에세이예요.\n1. 『나는 나로 살기로 했다』 김수현 — 대출 가능\n2. 『오늘도 무사히』 최대호 — 대출 가능\n3. 『아무튼, 계속』 김연수 — 대출 중 (예약 가능)"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S19",
+    "query_type": "broad_ambiguous",
+    "user_id": "P003-B",
+    "name": "정명희 (63세, 서울 노원구)",
+    "scenario_type": "broad_ambiguous + topic_uncertainty 엣지 + 3턴 좁히기",
+    "query_specificity": "두리뭉실 (가장 모호한 케이스)",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "x",
+    "edge_case": "topic_uncertainty",
+    "turn_count": 3,
+    "onboarding": {
+      
+      "preferred_length": "300p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["노원구립도서관", "불암정보도서관"],
+      "preferred_categories": [
+        { "main": "인문", "sub": "인문교양총서" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "건강", "sub": "건강일반" },
+        { "main": "역사/문화", "sub": "한국사" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "책 좀 추천해주세요",
+        "key_signals": [],
+        "slot_changes": {},
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "슬롯 전혀 없음 — 장르·목적·분위기 아무 단서도 없음"
+        },
+        "onboarding_note": "슬롯 전무 → onboarding 전부 보조 신호 활성: topic ['인문', '시/에세이', '건강', '역사/문화'], disliked 없음, length_soft 300p",
+        "system_response": "어떤 종류의 책을 좋아하세요?\n[ 에세이 ] [ 소설 ] [ 인문·교양 ] [ 역사 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "에세이나 인문서요. 삶에 대해 생각하게 하는 거",
+        "key_signals": ["CAT5_FORMAT (에세이, 인문서)", "CAT5_TOPIC (삶)"],
+        "slot_changes": {
+          "topic": { "coarse": ["시/에세이", "인문"], "fine": ["테마에세이", "인문교양총서"], "subject": ["삶", "인문"], "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["purpose_detail"],
+          "reason": "topic 잡혔으나 목적(교양/위로/통찰) 확인 필요"
+        },
+        "system_response": "어떤 목적으로 읽으시려고 하나요?\n[ 교양을 쌓으려고 ] [ 위로를 받고 싶어서 ] [ 인생 통찰을 얻고 싶어서 ]"
+      },
+      {
+        "turn": 3,
+        "user_input": "요즘 혼자 생각이 많아서요. 인생에 대한 통찰을 얻고 싶어요",
+        "key_signals": ["CAT1_NEGATIVE (혼자 생각이 많아)", "CAT2_MEANING (통찰)"],
+        "slot_changes": {
+          "purpose": { "value": "교양", "source": "direct" },
+          "mood": { "categories": ["recovery_meaning"], "raw": "혼자 생각이 많아서", "source": "inferred" },
+          "reading_level": { "value": "medium", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic + purpose + mood(recovery_meaning) 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "topic uncertainty LOW. page_length_soft 300p 약한 신호",
+        "rag_query": {
+          "keyword_query": ["에세이", "인문", "인생", "통찰"],
+          "semantic_query": "혼자 생각이 많을 때 인생에 대한 통찰을 주는 에세이·인문서",
+          "filters": { "cate_depth1": ["시/에세이", "인문"] },
+          "constraints": {},
+          "score_boost": {},
+          "session_signals": {
+            "purpose": "교양",
+            "mood": ["recovery_meaning"],
+            "reading_level": "medium"
+          },
+          "onboarding_signals": { "age": 63, "page_length_soft": { "operator": "lte", "value": 300 } }
+        },
+        "system_response": "인생에 대한 통찰을 주는 에세이·인문서예요.\n1. 『어떻게 살 것인가』 유시민\n2. 『혼자를 기르는 법』 은유\n3. 『죽음이란 무엇인가』 셸리 케이건"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S20",
+    "query_type": "broad_ambiguous",
+    "user_id": "P004-C",
+    "name": "임도현 (17세, 경기 용인시)",
+    "scenario_type": "broad_ambiguous + avoid_mood 엣지 + cate_depth2 boost",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2",
+    "edge_case": "avoid_mood",
+    "turn_count": 3,
+    "onboarding": {
+      
+      "preferred_length": "400p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["용인시립중앙도서관", "용인시립기흥도서관"],
+      "preferred_categories": [
+        { "main": "과학", "sub": "천문학" },
+        { "main": "과학", "sub": "물리학" },
+        { "main": "과학", "sub": "교양과학" },
+        { "main": "소설", "sub": "영미소설" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "요즘 읽을 만한 책이 없네요",
+        "key_signals": [],
+        "slot_changes": {},
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "슬롯 전혀 없음"
+        },
+        "onboarding_note": "슬롯 전무 → onboarding 전부 보조 신호 활성: ['과학', '소설']. disliked_keywords 없음. page_length_soft 400p",
+        "system_response": "어떤 종류의 책을 주로 읽으세요?\n[ 과학 ] [ 소설 ] [ 역사 ] [ 자기계발 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "과학이나 SF 좋아해요",
+        "key_signals": ["CAT5_TOPIC (과학, SF)"],
+        "slot_changes": {
+          "topic": { "coarse": ["과학", "소설"], "fine": ["교양과학", "장르소설"], "subject": ["SF"], "source": "direct" },
+          "purpose": { "value": "교양", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": [],
+          "_note": "분위기 취향 확인 — avoid_mood 없음. 과학책 스타일 선호 파악 필요"
+        },
+        "system_response": "피하고 싶은 스타일이 있나요?"
+      },
+      {
+        "turn": 3,
+        "user_input": "너무 딱딱하거나 수식 많은 건 싫어요. 재미있게 읽히는 거요",
+        "key_signals": ["CAT9_AVOID (싫어요)", "CAT4_EASY (재미있게 읽히는)"],
+        "slot_changes": {
+          "avoid_mood": { "keywords": ["딱딱한 교과서식", "수식 위주"], "source": "direct" },
+          "reading_level": { "value": "medium", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic(과학·SF) + purpose + avoid_mood 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "page_length_soft 400p 약한 신호",
+        "rag_query": {
+          "keyword_query": ["교양과학", "SF", "재미있게", "이야기 형식"],
+          "semantic_query": "딱딱하지 않고 이야기처럼 읽히는 교양과학·SF 책",
+          "filters": { "cate_depth1": ["자연/과학", "소설"] },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["교양과학", "장르소설"] },
+          "session_signals": {
+            "purpose": "교양",
+            "reading_level": "medium",
+            "avoid_mood": ["딱딱한 교과서식", "수식 위주"]
+          },
+          "onboarding_signals": { "age": 17, "page_length_soft": { "operator": "lte", "value": 400 } }
+        },
+        "system_response": "딱딱하지 않고 재미있게 읽히는 과학·SF 책이에요.\n1. 『코스모스』 칼 세이건\n2. 『파인만의 여섯 가지 물리 이야기』 리처드 파인만\n3. 『수학의 쓸모』 닉 폴슨"
+      }
+    ]
+  },
+
+  {
+    "scenario_id": "S21",
+    "query_type": "broad_ambiguous",
+    "user_id": "P005-B",
+    "name": "강태민 (33세, 서울 관악구)",
+    "scenario_type": "broad_ambiguous + custom_constraints 엣지 + cate_depth2+subject boost",
+    "query_specificity": "두리뭉실",
+    "constraints_complexity": "SIMPLE",
+    "filter_complexity": "SIMPLE",
+    "boost": "cate_depth2+subject",
+    "edge_case": "custom_constraints",
+    "turn_count": 3,
+    "onboarding": {
+      
+      "preferred_length": "250p 이하",
+      "disliked_keywords": [],
+      "frequent_libraries": ["관악구립도서관", "서울대학교 중앙도서관"],
+      "preferred_categories": [
+        { "main": "소설", "sub": "한국소설" },
+        { "main": "시/에세이", "sub": "테마에세이" },
+        { "main": "자기계발", "sub": "인간관계" }
+      ]
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_input": "뭐 읽을 만한 거 있어요?",
+        "key_signals": [],
+        "slot_changes": {},
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "슬롯 전혀 없음"
+        },
+        "onboarding_note": "슬롯 전무 → onboarding 전부 보조 신호 활성: ['소설', '시/에세이', '자기계발']. length_soft 250p",
+        "system_response": "어떤 책을 주로 즐기세요?\n[ 소설 ] [ 에세이 ] [ 자기계발 ] [ 직접 입력 ]"
+      },
+      {
+        "turn": 2,
+        "user_input": "소설이나 에세이요. 도시 생활에 좀 지쳐서 힐링되는 거 찾아요",
+        "key_signals": ["CAT5_FORMAT (소설, 에세이)", "CAT1_NEGATIVE (지쳐서)", "CAT1_RELAX (힐링)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설", "시/에세이"], "fine": [], "subject": [], "source": "direct" },
+          "mood": { "categories": ["negative_stressed", "recovery_relax"], "raw": "도시 생활에 지쳐서", "source": "direct" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": false,
+          "slots_to_ask": ["topic_subject"],
+          "reason": "장르는 잡혔으나 세부 방향(한국/외국, 문체 선호 등) 확인하면 더 정확"
+        },
+        "system_response": "한국 작가 거 선호하세요, 아니면 외국 작가도 괜찮으세요?"
+      },
+      {
+        "turn": 3,
+        "user_input": "한국 작가 우선이고, 너무 가볍지 않고 약간 문학적인 느낌 있는 거요",
+        "key_signals": ["CAT5_TOPIC (한국 작가)", "CAT4_MEDIUM (문학적인)"],
+        "slot_changes": {
+          "topic": { "coarse": ["소설", "시/에세이"], "fine": ["한국소설", "테마에세이"], "subject": ["도시생활", "힐링"], "source": "direct" },
+          "filters_update": { "custom_constraints": ["한국 작가 우선", "문학적인 문체"] },
+          "reading_level": { "value": "medium", "source": "direct" },
+          "purpose": { "value": "재미", "source": "inferred" }
+        },
+        "sufficiency_judgment": {
+          "rag_ready": true,
+          "slots_to_ask": [],
+          "reason": "topic + mood + custom_constraints(한국 작가·문학적 문체) + purpose + reading_level 채워짐 — RAG 진행"
+        },
+        "onboarding_note": "page_length_soft 250p 약한 신호",
+        "rag_query": {
+          "keyword_query": ["한국소설", "에세이", "도시생활", "힐링", "문학적"],
+          "semantic_query": "도시 생활에 지쳤을 때 힐링이 되는 문학적인 한국 작가 소설·에세이",
+          "filters": {
+            "cate_depth1": ["소설", "시/에세이"],
+            "custom_constraints": ["한국 작가 우선", "문학적인 문체"]
+          },
+          "constraints": {},
+          "score_boost": { "cate_depth2": ["한국소설", "테마에세이"], "subject": ["도시생활", "힐링"] },
+          "session_signals": {
+            "mood": ["negative_stressed", "recovery_relax"],
+            "purpose": "재미",
+            "reading_level": "medium"
+          },
+          "onboarding_signals": { "age": 33, "page_length_soft": { "operator": "lte", "value": 250 } }
+        },
+        "system_response": "도시 생활의 피로를 달래줄 문학적인 한국 소설·에세이예요.\n1. 『채식주의자』 한강\n2. 『혼자를 기르는 법』 은유\n3. 『어느 날 고궁을 나오면서』 김수영"
+      }
+    ]
+  }
+]

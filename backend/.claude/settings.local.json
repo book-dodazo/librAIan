@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python)",
+      "Bash(cd /d \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/services/chat_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(r'C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\\\\app\\\\services\\\\chat_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\\\\patch_detector.py\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(r'C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\librAIan\\\\backend\\\\app\\\\modules\\\\signal\\\\detector.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Read(//c/Users/User/Documents/GitHub/librAIan/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\User\\Documents\\GitHub\\librAIan"
+    ]
+  }
+}

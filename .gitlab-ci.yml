@@ -1,0 +1,39 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  BACKEND_IMAGE: $CI_REGISTRY_IMAGE/backend:latest
+  FRONTEND_IMAGE: $CI_REGISTRY_IMAGE/frontend:latest
+
+build-backend:
+  stage: build
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $BACKEND_IMAGE ./backend
+    - docker push $BACKEND_IMAGE
+  only:
+    - dev
+
+build-frontend:
+  stage: build
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build -t $FRONTEND_IMAGE --build-arg VITE_API_URL=/api ./frontend
+    - docker push $FRONTEND_IMAGE
+  only:
+    - dev
+
+deploy:
+  stage: deploy
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker pull $BACKEND_IMAGE
+    - docker pull $FRONTEND_IMAGE
+    - docker rm -f librain-backend librain-frontend 2>/dev/null || true
+    - docker compose up -d
+  only:
+    - dev

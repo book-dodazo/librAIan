@@ -191,6 +191,12 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Local database dumps / generated DB files
+backend/app/db/*.sql
+backend/app/db/*.dump
+backend/app/db/*.backup
+backend/app/db/database/
+
 # PyPI configuration file
 .pypirc
 
@@ -205,3 +211,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Data
+data/
+
+# K8s 시크릿 — 실제 API 키가 들어가므로 git에 올리지 않음
+k8s/backend-secret.yaml
+
+# 로그 파일
+backend/logs/
