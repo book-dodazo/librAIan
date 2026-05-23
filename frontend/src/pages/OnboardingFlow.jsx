@@ -9,7 +9,7 @@ const STEP_TITLES = {
   length:     '선호하는 책 분량이 있나요?',
   keywords:   '잘 안 읽게 되는 책은?',
   age:        '나이대를 알려주세요',
-  libraries:  '자주 가는 도서관이 있나요?',
+  libraries:  '자주 가는 도서관을 선택해주세요',
 };
 
 const STEP_HINTS = {
@@ -18,7 +18,7 @@ const STEP_HINTS = {
   length:     '없으면 건너뛰어도 됩니다',
   keywords:   '해당하는 것을 모두 선택하세요',
   age:        '건너뛰어도 됩니다',
-  libraries:  '지역명이나 도서관명으로 검색, 최대 2개',
+  libraries:  '지역명이나 도서관명으로 검색 (필수 1개, 최대 2개)',
 };
 
 const DISLIKED_KEYWORDS = [
@@ -509,7 +509,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
         </div>
 
         <div className="flex gap-2">
-          {selectedLibs.length === 0 ? <SkipBtn label="완료 (건너뛰기)" /> : <NextBtn label="완료" />}
+          <NextBtn label="완료" disabled={selectedLibs.length === 0} />
         </div>
       </div>
     );
