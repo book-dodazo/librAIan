@@ -154,8 +154,6 @@ async def build_rag_query(context: SessionContext) -> dict[str, Any]:
         # 슬롯 보완 힌트: narrow=해당 슬롯 방향 불확실, verify=inferred 값 재확인 필요
         # Reranker가 해당 슬롯 값에 낮은 가중치를 적용할 수 있도록 전달
         "slot_revision_hints"  : context.slot_revision_hints or {},
-        # Refinement: 이전에 추천한 책 ISBN 제외 목록
-        "exclude_isbns"        : list(context.previous_result or []),
     }
 
     logger.info("RAG 쿼리 생성 완료: %s", rag_query)
