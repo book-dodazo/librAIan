@@ -29,6 +29,18 @@ def get_categories():
     return {k: v for k, v in tree.items() if k not in _EXCLUDED_CATS}
 
 
+def _clean_title(title: str) -> str:
+    """
+    DB 제목에서 부제/시리즈/원제 제거.
+    예) '해리포터와 비밀의 방 - 포터 시리즈 (20주년 개정판) = Harry Potter...'
+     → '해리포터와 비밀의 방'
+    """
+    for sep in (" - ", " = "):
+        if sep in title:
+            title = title.split(sep)[0]
+    return title.strip()
+
+
 @router.get("/books")
 def search_books(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     try:
@@ -36,7 +48,7 @@ def search_books(q: str = Query(..., min_length=1), db: Session = Depends(get_db
             text("SELECT DISTINCT title, author FROM books WHERE LOWER(title) LIKE LOWER(:q) ORDER BY title LIMIT 10"),
             {"q": f"%{q.strip()}%"},
         ).fetchall()
-        return [{"title": r.title, "author": r.author} for r in rows]
+        return [{"title": _clean_title(r.title), "author": r.author} for r in rows]
     except Exception as e:
         logger.warning("책 검색 실패: %s", e)
         return []
