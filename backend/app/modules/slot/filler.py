@@ -182,6 +182,7 @@ async def extract_slots(
         query       = query,
         slots_state = slots_full,
         turn        = context.turn_count,
+        asked_slots = list(context.asked_slots),
     )
     try:
         suf_raw = await chat_complete_json(

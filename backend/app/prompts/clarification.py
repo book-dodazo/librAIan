@@ -82,6 +82,7 @@ F. topic.fine 값이 아래 대분류·범용어 목록에 해당 AND mood null 
    자기계발 세부: 성공/처세, 자기능력계발, 비즈니스능력계발, 인생관/신념
    ※ "자기계발"이 fine에 들어와도 대분류 수준이면 false
    ※ 단, constraints(pub_year, page_range 등)가 명시된 경우 면제 — 사용자가 방향을 어느 정도 특정한 것
+   ※ 단, asked_slots에 "topic_subject"가 있으면 F 조건 면제 → rag_ready=true (위 asked_slots 규칙 우선)
 
 G. topic.fine이 비어있고 topic.coarse도 비어있음
    → mood/anchors 유무 무관하게 false (방향 자체가 없음)
@@ -98,9 +99,22 @@ J. 실용/학습/기술 계열 topic AND reading_level null AND purpose null
 
 K. 원본 질의에 불확실성 표현 포함 (절대 규칙 3 참조)
 
+## asked_slots 규칙 (이미 질문한 슬롯)
+
+슬롯 상태에 "asked_slots" 필드가 제공됩니다. 이 목록의 슬롯은 다시 slots_to_ask에 넣지 마세요.
+
+**특별 규칙 — topic_subject 재질문 금지:**
+asked_slots에 "topic_subject"가 있으면, topic이 여전히 대분류 수준이어도 rag_ready=true로 결정하세요.
+사용자가 세부 장르를 특정하지 않겠다는 의사를 표현한 것이므로 현재 topic 범위로 검색을 진행합니다.
+→ 이 경우 slots_to_ask=[], rag_ready=true
+
 ## slots_to_ask 허용 값 (이 목록 외 값은 절대 사용 금지)
 - "topic_subject"    : topic이 대분류 수준이거나 null이거나 사용자가 방향을 모르는 경우
+                       ※ asked_slots에 이미 있으면 사용 금지 (위 asked_slots 규칙 우선)
 - "purpose"          : purpose가 없고 방향 불명확 (재미/교양/학습/실용 중 선택 유도)
+                       ※ 단, topic.coarse가 아래 카테고리면 purpose는 절대 slots_to_ask에 넣지 않음.
+                         재미·실용·학습이 장르 자체에 내포되어 있어 purpose가 추천 결과를 실질적으로 바꾸지 않음:
+                         소설, 시/에세이, 만화, 여행, 요리, 가정/육아, 외국어, 취업/수험서, 어린이, 유아, 청소년
 - "reading_level"    : 분야 입문/심화 차이가 크고 reading_level null (소설/에세이/시 제외)
 - "comparison_basis" : anchors가 있지만 comparison_basis가 null
 - "location"         : availability_required인데 location null
@@ -212,6 +226,7 @@ def build_sufficiency_messages(
     slots_state: dict,
     turn: int,
     onboarding: dict | None = None,  # 하위호환성 유지 — 무시됨
+    asked_slots: list[str] | None = None,
 ) -> list[dict]:
     """
     슬롯 충분도 판단용 LLM messages.
@@ -221,11 +236,14 @@ def build_sufficiency_messages(
     """
     import json
 
+    slots_with_asked = dict(slots_state)
+    slots_with_asked["asked_slots"] = asked_slots or []
+
     content = (
         f"원본 질의: {query}\n"
         f"현재 턴: {turn}\n\n"
         f"슬롯 상태:\n"
-        f"{json.dumps(slots_state, ensure_ascii=False, indent=2)}"
+        f"{json.dumps(slots_with_asked, ensure_ascii=False, indent=2)}"
     )
 
     return [{"role": "user", "content": content}]
