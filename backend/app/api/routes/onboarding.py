@@ -45,10 +45,17 @@ def _clean_title(title: str) -> str:
 def search_books(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
     try:
         rows = db.execute(
-            text("SELECT DISTINCT title, author FROM books WHERE LOWER(title) LIKE LOWER(:q) ORDER BY title LIMIT 10"),
+            text("SELECT DISTINCT title, author, mid_cate FROM books WHERE LOWER(title) LIKE LOWER(:q) ORDER BY title LIMIT 10"),
             {"q": f"%{q.strip()}%"},
         ).fetchall()
-        return [{"title": _clean_title(r.title), "author": r.author} for r in rows]
+        def _to_mid_list(val) -> list[str]:
+            if not val:
+                return []
+            if isinstance(val, list):
+                return [v for v in val if v]
+            return [val]
+
+        return [{"title": _clean_title(r.title), "author": r.author, "mid_cate": _to_mid_list(r.mid_cate)} for r in rows]
     except Exception as e:
         logger.warning("책 검색 실패: %s", e)
         return []

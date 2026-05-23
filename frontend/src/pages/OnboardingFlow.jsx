@@ -180,7 +180,12 @@ export default function OnboardingFlow({ onComplete, loading }) {
   if (step === 'books') {
     const addBook = (book) => {
       if (!selectedBooks.find(b => b.title === book.title)) {
-        setSelectedBooks(p => [...p, book]);
+        // mid_cate 포함해서 저장 (온보딩 신호로 활용)
+        setSelectedBooks(p => [...p, {
+          title   : book.title,
+          author  : book.author,
+          mid_cate: Array.isArray(book.mid_cate) ? book.mid_cate : (book.mid_cate ? [book.mid_cate] : []),
+        }]);
       }
       setBookQuery('');
       setBookResults([]);
