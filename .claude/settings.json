@@ -16,7 +16,10 @@
       "Bash(git commit -m 'Fix BM25 0 results: translate internal coarse names to ES large_cate values *)",
       "Bash(git commit -m 'Improve recommendation reason: more specific and structured output *)",
       "Bash(git checkout *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(grep -iE \"\\\\.log$|/logs?/|logs?\\\\.txt\")",
+      "Bash(grep -iE \"libraiian\\\\.db|\\\\.db$\")",
+      "Bash(git remote *)"
     ]
   }
 }
