@@ -93,15 +93,28 @@ export default function OnboardingFlow({ onComplete, loading }) {
       .catch(() => {});
   }, []);
 
-  const bookTimer = useRef(null);
+  const bookTimer   = useRef(null);
+  const bookAbortRef = useRef(null);
+  const bookComposing = useRef(false);
+
   useEffect(() => {
     if (!bookQuery.trim()) { setBookResults([]); return; }
     clearTimeout(bookTimer.current);
     bookTimer.current = setTimeout(async () => {
+      // 이전 요청 취소
+      bookAbortRef.current?.abort();
+      const controller = new AbortController();
+      bookAbortRef.current = controller;
+
       setBookSearching(true);
-      try { setBookResults(await searchBooks(bookQuery)); }
-      catch { setBookResults([]); }
-      finally { setBookSearching(false); }
+      try {
+        const results = await searchBooks(bookQuery, controller.signal);
+        setBookResults(results);
+      } catch (e) {
+        if (e.name !== 'AbortError') setBookResults([]);
+      } finally {
+        setBookSearching(false);
+      }
     }, 400);
     return () => clearTimeout(bookTimer.current);
   }, [bookQuery]);
@@ -203,6 +216,11 @@ export default function OnboardingFlow({ onComplete, loading }) {
               type="text"
               value={bookQuery}
               onChange={e => setBookQuery(e.target.value)}
+              onCompositionStart={() => { bookComposing.current = true; }}
+              onCompositionEnd={e => {
+                bookComposing.current = false;
+                setBookQuery(e.target.value); // 조합 완료 후 최종값으로 검색
+              }}
               placeholder="책 제목으로 검색"
               className="w-full border border-ink/15 rounded px-4 py-2.5 text-sm bg-paper focus:outline-none focus:border-ink/40 placeholder:text-ink-muted"
             />
