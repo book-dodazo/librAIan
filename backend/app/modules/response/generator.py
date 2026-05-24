@@ -73,7 +73,7 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
     from sqlalchemy import text
     placeholders = ", ".join(f"'{isbn}'" for isbn in isbns)
     query = text(f"""
-        SELECT isbn, ori_cover_s, book_intro, review, review_count
+        SELECT isbn, ori_cover_s, book_intro, review, review_count, review_score
         FROM books
         WHERE isbn IN ({placeholders})
     """)
@@ -92,10 +92,15 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
                     review_raw = {}
             reader_review = _build_reader_review(review_raw, row[4] or 0)
 
+            # review_score: 0~10 스케일 → 5점 만점으로 변환
+            raw_score = row[5]
+            review_score = round(float(raw_score) / 2, 1) if raw_score else None
+
             result[row[0]] = {
                 "cover_url"     : row[1] or "",
                 "book_intro"    : (row[2] or "")[:800],
                 "reader_review" : reader_review,
+                "review_score"  : review_score,
             }
     except Exception as e:
         logger.error("책 상세 정보 조회 실패: %s", e)
@@ -282,6 +287,8 @@ async def generate_result_cards(
             "publisher"             : book.get("publisher", ""),
             "cover_url"             : detail.get("cover_url", ""),
             "book_intro"            : detail.get("book_intro", ""),
+            "reader_review"         : detail.get("reader_review", ""),
+            "review_score"          : detail.get("review_score"),
             "recommendation_reason" : reason,
             "loan_available"        : book.get("loan_available", "-"),
             "has_book"              : book.get("has_book", "-"),
