@@ -1,15 +1,48 @@
-import { useState, useEffect } from 'react';
-import { checkHealth } from '../../services';
+import { useState, useEffect, useCallback } from 'react';
+import { checkHealth, getSessions, deleteSession, getSession } from '../../services';
 import { QUICK_PROMPTS } from '../../constants/prompts';
 
-export default function Sidebar({ userName, onRestart, onFeedback, onProfile }) {
+export default function Sidebar({ userName, onRestart, onFeedback, onProfile, onLoadSession, currentSessionId }) {
   const [isHealthy, setIsHealthy] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     checkHealth()
       .then(setIsHealthy)
       .catch(() => setIsHealthy(false));
   }, []);
+
+  const loadSessions = useCallback(() => {
+    getSessions()
+      .then(setSessions)
+      .catch(() => setSessions([]));
+  }, []);
+
+  useEffect(() => {
+    if (showHistory) loadSessions();
+  }, [showHistory, loadSessions]);
+
+  // 새 세션이 생성될 때 목록 새로고침
+  useEffect(() => {
+    if (currentSessionId && showHistory) loadSessions();
+  }, [currentSessionId, showHistory, loadSessions]);
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    await deleteSession(id);
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleLoad = async (sessionId) => {
+    try {
+      const session = await getSession(sessionId);
+      onLoadSession?.(session);
+      setShowHistory(false);
+    } catch (e) {
+      console.error('세션 불러오기 실패', e);
+    }
+  };
 
   return (
     <aside className="w-64 bg-ink text-paper flex flex-col px-7 py-9 flex-shrink-0 relative overflow-hidden sidebar-pattern">
@@ -44,6 +77,14 @@ export default function Sidebar({ userName, onRestart, onFeedback, onProfile }) 
           <button onClick={onRestart} className="text-left text-[12.5px] text-paper/70 px-3.5 py-2 rounded hover:bg-white/7 hover:text-paper transition-colors">
             ↺ 처음부터 다시
           </button>
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className={`text-left text-[12.5px] px-3.5 py-2 rounded transition-colors ${
+              showHistory ? 'text-paper bg-white/10' : 'text-paper/70 hover:bg-white/7 hover:text-paper'
+            }`}
+          >
+            ◷ 이전 대화
+          </button>
           <button onClick={onFeedback} className="text-left text-[12.5px] text-paper/70 px-3.5 py-2 rounded hover:bg-white/7 hover:text-paper transition-colors">
             ✦ 피드백 남기기
           </button>
@@ -52,6 +93,39 @@ export default function Sidebar({ userName, onRestart, onFeedback, onProfile }) 
           </button>
         </div>
       </div>
+
+      {/* 이전 대화 목록 */}
+      {showHistory && (
+        <div className="mb-6 flex-1 overflow-y-auto min-h-0">
+          <p className="text-[10px] tracking-[0.2em] uppercase text-paper/35 mb-2">이전 대화</p>
+          {sessions.length === 0 ? (
+            <p className="text-xs text-paper/30 px-1">저장된 대화가 없어요</p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {sessions.map((s) => (
+                <li key={s.id}>
+                  <button
+                    onClick={() => handleLoad(s.id)}
+                    className={`w-full text-left text-[12px] leading-snug px-3 py-2 rounded group flex items-center justify-between gap-1 transition-colors ${
+                      currentSessionId === s.id
+                        ? 'bg-white/15 text-paper'
+                        : 'text-paper/60 hover:bg-white/7 hover:text-paper'
+                    }`}
+                  >
+                    <span className="truncate flex-1">{s.title}</span>
+                    <span
+                      onClick={(e) => handleDelete(e, s.id)}
+                      className="opacity-0 group-hover:opacity-100 text-paper/40 hover:text-red-400 text-xs px-1 transition-opacity flex-shrink-0"
+                    >
+                      ✕
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* 상태 + 사용자 */}
       <div className="mt-auto border-t border-white/8 pt-5">

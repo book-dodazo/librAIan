@@ -8,7 +8,7 @@ import { SlotStatusBar, MessageBubble, ChatInput, EmptyState, LoadingBubble } fr
 export default function ChatPage() {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
-  const { messages, filledSlots, isLoading, sendMessage, selectChoice, confirmInferred, resetChat } = useChat();
+  const { messages, filledSlots, isLoading, sessionId, sendMessage, selectChoice, confirmInferred, resetChat, loadSession } = useChat();
 
   const user = getUser() ?? {};
 
@@ -31,6 +31,8 @@ export default function ChatPage() {
           navigate('/feedback', { state: { results: lastResultMsg?.search_results, availability: lastResultMsg?.availability_index } })
         }
         onProfile={() => navigate('/profile')}
+        onLoadSession={loadSession}
+        currentSessionId={sessionId}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
