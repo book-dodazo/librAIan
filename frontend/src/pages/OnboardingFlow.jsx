@@ -53,36 +53,52 @@ const LENGTH_OPERATORS = [
   { key: 'around', label: '내외' },
 ];
 
-export default function OnboardingFlow({ onComplete, loading }) {
+// preferred_length 문자열 → {pages, op, noLength} 파싱
+function parseLengthString(str) {
+  if (!str) return { pages: '', op: 'lte', noLength: true };
+  const match = str.match(/^(\d+)p\s*(이하|이상|내외)/);
+  if (!match) return { pages: '', op: 'lte', noLength: true };
+  const opMap = { '이하': 'lte', '이상': 'gte', '내외': 'around' };
+  return { pages: match[1], op: opMap[match[2]] ?? 'lte', noLength: false };
+}
+
+export default function OnboardingFlow({ onComplete, loading, initialData = null }) {
   const [stepIndex, setStepIndex] = useState(0);
+
+  // initialData로부터 초기값 파싱
+  const initLength = parseLengthString(initialData?.preferred_length);
 
   // Step 1: books
   const [bookQuery, setBookQuery]       = useState('');
   const [bookResults, setBookResults]   = useState([]);
   const [bookSearching, setBookSearching] = useState(false);
-  const [selectedBooks, setSelectedBooks] = useState([]);
+  const [selectedBooks, setSelectedBooks] = useState(initialData?.recent_liked_books ?? []);
 
   // Step 2: categories
   const [categoryTree, setCategoryTree] = useState({});
   const [activeMain, setActiveMain]     = useState('');
-  const [selectedCats, setSelectedCats] = useState([]); // [{main, sub}]
+  const [selectedCats, setSelectedCats] = useState(initialData?.preferred_categories ?? []);
 
   // Step 3: length
-  const [lengthPages, setLengthPages] = useState('');
-  const [lengthOp, setLengthOp]       = useState('lte');
-  const [noLength, setNoLength]       = useState(false);
+  const [lengthPages, setLengthPages] = useState(initLength.pages);
+  const [lengthOp, setLengthOp]       = useState(initLength.op);
+  const [noLength, setNoLength]       = useState(initLength.noLength);
 
   // Step 4: keywords
-  const [selectedKws, setSelectedKws] = useState([]);
+  const [selectedKws, setSelectedKws] = useState(initialData?.disliked_keywords ?? []);
 
   // Step 5: age
-  const [selectedAge, setSelectedAge] = useState(null);
+  const [selectedAge, setSelectedAge] = useState(initialData?.age ?? null);
 
   // Step 6: libraries
   const [libQuery, setLibQuery]           = useState('');
   const [libResults, setLibResults]       = useState([]);
   const [libSearching, setLibSearching]   = useState(false);
-  const [selectedLibs, setSelectedLibs]   = useState([]);
+  const [selectedLibs, setSelectedLibs]   = useState(
+    (initialData?.frequent_libraries ?? []).map(l =>
+      typeof l === 'string' ? { name: l, code: '' } : l
+    )
+  );
 
   useEffect(() => {
     getCategories()

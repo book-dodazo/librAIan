@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FeedbackHistoryRow } from '../components/profile';
 import { removeUser, removeToken } from '../utils';
 import { getProfile, updateProfile } from '../services/profileApi';
+import OnboardingFlow from './OnboardingFlow';
 
 // 온보딩 필드 한글 레이블
 const FIELD_LABELS = {
@@ -12,14 +13,6 @@ const FIELD_LABELS = {
   frequent_libraries  : '자주 가는 도서관',
   recent_liked_books  : '최근 좋았던 책',
   preferred_categories: '선호 분야',
-  // 슬롯 키
-  topic               : '관심 주제',
-  purpose             : '독서 목적',
-  reading_level       : '독서 수준',
-  mood                : '원하는 분위기',
-  pages               : '선호 페이지 수',
-  year                : '출판 연도',
-  availability        : '대출 가능 여부',
 };
 
 // 값 → 표시용 문자열
@@ -37,29 +30,17 @@ function formatValue(value) {
   return String(value);
 }
 
-// 편집 가능한 값인지 판별 — 복잡한 객체 배열은 읽기 전용
-function isEditable(value) {
-  if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') return false;
-  return true;
-}
-
-// 편집용 문자열 → 원래 타입으로 변환
-function parseEditValue(original, text) {
-  if (Array.isArray(original)) {
-    return text.split(',').map((s) => s.trim()).filter(Boolean);
-  }
-  if (text === '') return null;
-  return text;
-}
+// 내부 메타 키 제외
+const META_KEYS = new Set(['filled_slots', 'context', '_ui_messages']);
+// 프로필에 표시할 온보딩 키 순서
+const DISPLAY_KEYS = ['recent_liked_books', 'preferred_categories', 'preferred_length', 'disliked_keywords', 'age', 'frequent_libraries'];
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     getProfile()
@@ -74,34 +55,18 @@ export default function ProfilePage() {
     navigate('/login');
   };
 
-  const startEdit = () => {
-    setEditData({ ...(profile?.onboarding_data ?? {}) });
-    setSaveError('');
-    setEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setSaveError('');
-  };
-
-  const handleSave = async () => {
+  const handleEditComplete = async (newData) => {
     setSaving(true);
-    setSaveError('');
     try {
-      await updateProfile(editData);
-      setProfile((prev) => ({ ...prev, onboarding_data: editData }));
+      const merged = { ...(profile?.onboarding_data ?? {}), ...newData };
+      await updateProfile(merged);
+      setProfile((prev) => ({ ...prev, onboarding_data: merged }));
       setEditing(false);
     } catch (e) {
-      setSaveError(e.message ?? '저장에 실패했습니다.');
+      alert('저장에 실패했습니다: ' + (e.message ?? ''));
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleChange = (key, text) => {
-    const original = profile?.onboarding_data?.[key];
-    setEditData((prev) => ({ ...prev, [key]: parseEditValue(original, text) }));
   };
 
   if (loading) {
@@ -116,9 +81,9 @@ export default function ProfilePage() {
   const onboardingData = profile?.onboarding_data ?? {};
   const feedbackHistory = profile?.feedback_history ?? [];
 
-  // 내부 메타 키 제외
-  const META_KEYS = new Set(['filled_slots', 'context', '_ui_messages']);
-  const displayEntries = Object.entries(onboardingData).filter(([k]) => !META_KEYS.has(k));
+  const displayEntries = DISPLAY_KEYS
+    .filter((k) => !META_KEYS.has(k))
+    .map((k) => [k, onboardingData[k] ?? null]);
 
   return (
     <div className="min-h-screen bg-paper">
@@ -142,67 +107,31 @@ export default function ProfilePage() {
         <section className="mb-10">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-medium tracking-widest uppercase text-ink-muted">나의 독서 프로필</h2>
-            {!editing ? (
-              <button
-                onClick={startEdit}
-                className="text-xs text-ink-muted border border-ink/15 rounded px-3 py-1 hover:bg-paper-2 transition-colors"
-              >
-                편집
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={cancelEdit}
-                  className="text-xs text-ink-muted border border-ink/15 rounded px-3 py-1 hover:bg-paper-2 transition-colors"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="text-xs text-white bg-ink rounded px-3 py-1 hover:bg-ink/80 transition-colors disabled:opacity-50"
-                >
-                  {saving ? '저장 중...' : '저장'}
-                </button>
-              </div>
-            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs text-ink-muted border border-ink/15 rounded px-3 py-1 hover:bg-paper-2 transition-colors"
+            >
+              편집
+            </button>
           </div>
 
-          {saveError && (
-            <p className="text-xs text-red-500 mb-2">{saveError}</p>
-          )}
-
           <div className="bg-white border border-ink/10 rounded-lg px-5">
-            {displayEntries.length === 0 ? (
+            {displayEntries.every(([, v]) => !formatValue(v)) ? (
               <p className="text-sm text-ink-muted py-6 text-center">
                 아직 프로필이 없습니다.<br />채팅을 통해 책을 추천받으면 자동으로 쌓입니다.
               </p>
             ) : (
               displayEntries.map(([key, value]) => {
-                const label = FIELD_LABELS[key] ?? key;
                 const formatted = formatValue(value);
-                const editable = isEditable(value);
-
                 return (
                   <div key={key} className="flex items-center justify-between py-3 border-b border-ink/8 last:border-0 gap-3">
-                    <span className="text-sm text-ink-muted flex-shrink-0">{label}</span>
-
-                    {editing && editable ? (
-                      <input
-                        type="text"
-                        value={formatValue(editData[key]) ?? ''}
-                        onChange={(e) => handleChange(key, e.target.value)}
-                        placeholder="지정 없음"
-                        className="text-sm text-ink text-right bg-paper-2 border border-ink/15 rounded-lg px-3 py-1 w-48 focus:outline-none focus:border-ink/40 transition-colors"
-                      />
+                    <span className="text-sm text-ink-muted flex-shrink-0">{FIELD_LABELS[key] ?? key}</span>
+                    {formatted ? (
+                      <span className="text-sm text-ink font-medium bg-paper-2 px-3 py-1 rounded-full max-w-[60%] text-right truncate">
+                        {formatted}
+                      </span>
                     ) : (
-                      formatted ? (
-                        <span className="text-sm text-ink font-medium bg-paper-2 px-3 py-1 rounded-full max-w-[60%] text-right truncate">
-                          {formatted}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-ink-muted/40 italic">지정 없음</span>
-                      )
+                      <span className="text-sm text-ink-muted/40 italic">지정 없음</span>
                     )}
                   </div>
                 );
@@ -237,6 +166,26 @@ export default function ProfilePage() {
           </div>
         </section>
       </div>
+
+      {/* 편집 오버레이 — 온보딩 플로우 재사용 */}
+      {editing && (
+        <div className="fixed inset-0 z-50 bg-paper overflow-y-auto">
+          <div className="max-w-sm mx-auto px-6 py-12">
+            <button
+              onClick={() => setEditing(false)}
+              className="text-xs text-ink-muted hover:text-ink mb-6 flex items-center gap-1 transition-colors"
+            >
+              ← 취소
+            </button>
+            <p className="text-xs text-ink-muted mb-6 text-center tracking-widest uppercase">독서 프로필 수정</p>
+            <OnboardingFlow
+              onComplete={handleEditComplete}
+              loading={saving}
+              initialData={onboardingData}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
