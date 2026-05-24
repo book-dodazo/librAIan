@@ -10,7 +10,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/chat"     element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+      <Route path="/chat"     element={<ChatPage />} />
       <Route path="/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
       <Route path="/profile"  element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="/dev/onboarding" element={
