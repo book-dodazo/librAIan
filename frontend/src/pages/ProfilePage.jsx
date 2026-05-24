@@ -57,7 +57,7 @@ export default function ProfilePage() {
           <div className="bg-white border border-ink/10 rounded-lg px-5">
             {Object.keys(onboardingData).length > 0 ? (
               Object.entries(onboardingData).map(([key, value]) => (
-                <SlotRow key={key} slotKey={key} value={String(value)} />
+                <SlotRow key={key} slotKey={key} value={value} />
               ))
             ) : (
               <p className="text-sm text-ink-muted py-6 text-center">
