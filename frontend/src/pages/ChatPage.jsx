@@ -10,11 +10,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef(null);
   const { messages, filledSlots, isLoading, sessionId, sendMessage, selectChoice, confirmInferred, resetChat, loadSession } = useChat();
 
-  const user = getUser() ?? {};
-
-  useEffect(() => {
-    if (!getUser()) navigate('/login');
-  }, [navigate]);
+  const user = getUser(); // null이면 게스트
+  const isGuest = !user;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,12 +22,13 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen overflow-hidden bg-paper font-sans">
       <Sidebar
-        userName={user.name}
+        userName={user?.name}
+        isGuest={isGuest}
         onRestart={resetChat}
         onFeedback={() =>
           navigate('/feedback', { state: { results: lastResultMsg?.search_results, availability: lastResultMsg?.availability_index } })
         }
-        onProfile={() => navigate('/profile')}
+        onProfile={() => isGuest ? navigate('/login') : navigate('/profile')}
         onLoadSession={loadSession}
         currentSessionId={sessionId}
       />
