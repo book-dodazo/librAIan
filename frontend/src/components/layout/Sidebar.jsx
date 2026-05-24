@@ -48,7 +48,7 @@ export default function Sidebar({ userName, onRestart, onFeedback, onProfile, on
     <aside className="w-64 bg-ink text-paper flex flex-col px-7 py-9 flex-shrink-0 relative overflow-hidden sidebar-pattern">
       {/* 로고 */}
       <div className="mb-10">
-        <h1 className="font-serif text-xl font-bold tracking-tight">책마루</h1>
+        <h1 className="font-serif text-xl font-bold tracking-tight">librAIan</h1>
         <p className="text-[10px] tracking-[0.2em] uppercase text-paper/40 mt-1">AI Book Curation</p>
       </div>
 

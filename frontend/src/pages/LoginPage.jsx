@@ -56,7 +56,7 @@ export default function LoginPage() {
       <div className="min-h-screen bg-paper flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-10">
-            <h1 className="font-serif text-4xl font-bold text-ink mb-1">책마루</h1>
+            <h1 className="font-serif text-4xl font-bold text-ink mb-1">librAIan</h1>
             <p className="text-xs tracking-[0.2em] uppercase text-ink-muted">독서 취향 파악</p>
           </div>
           {error && (
@@ -72,7 +72,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-paper flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <h1 className="font-serif text-4xl font-bold text-ink mb-1">책마루</h1>
+          <h1 className="font-serif text-4xl font-bold text-ink mb-1">librAIan</h1>
           <p className="text-xs tracking-[0.2em] uppercase text-ink-muted">AI Book Curation</p>
         </div>
 
