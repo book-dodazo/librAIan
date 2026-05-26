@@ -43,7 +43,8 @@ def check_loan_availability(
         resp = requests.get(BOOK_EXIST_URL, params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
-        result = data.get("result", {})
+        # 응답 구조: {"response": {"result": {"hasBook": "Y", "loanAvailable": "Y"}}}
+        result = data.get("response", {}).get("result", {})
         return {
             "isbn": isbn,
             "has_book": result.get("hasBook", "N"),

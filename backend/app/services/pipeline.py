@@ -356,8 +356,8 @@ async def run_full_pipeline(
         rag_query    = result.rag_query,
     )
 
-    # [5] 대출 가능 여부 조회 — 리랭킹 Top10 대상
-    candidate_books = (result.reranked_results or result.hybrid_results)[:10]
+    # [5] 대출 가능 여부 조회 — 전체 결과 대상 (대출 가능 책 탐색 범위 확대)
+    candidate_books = (result.reranked_results or result.hybrid_results)
     result.availability_required = context.slots.availability_required
     result.availability_index = run_availability(
         books        = candidate_books,
