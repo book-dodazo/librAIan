@@ -75,11 +75,13 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
                   </div>
 
                   {/* 별점 */}
-                  {book.review_score != null && (
+                  {book.review_score != null ? (
                     <p className="text-xs text-amber-500 mt-0.5">
                       {'★'.repeat(Math.floor(book.review_score))}{'☆'.repeat(5 - Math.floor(book.review_score))}
                       <span className="text-ink-muted ml-1">{book.review_score.toFixed(1)}</span>
                     </p>
+                  ) : (
+                    <p className="text-xs text-ink-muted/50 mt-0.5">{'☆'.repeat(5)}<span className="ml-1">—</span></p>
                   )}
 
                   {/* 대출 가능 여부 */}
@@ -116,16 +118,16 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
               )}
 
               {/* 독자 리뷰 */}
-              {book.reader_review && (
-                <div className="px-4 pb-4">
-                  <div className="rounded-lg p-3 border border-ink/8 bg-white">
-                    <p className="text-[11px] font-medium text-ink-muted mb-1">📝 독자 리뷰</p>
-                    <p className="text-xs text-ink-muted leading-relaxed">
-                      {book.reader_review}
-                    </p>
-                  </div>
+              <div className="px-4 pb-4">
+                <div className="rounded-lg p-3 border border-ink/8 bg-white">
+                  <p className="text-[11px] font-medium text-ink-muted mb-1">📝 독자 리뷰</p>
+                  {book.reader_review ? (
+                    <p className="text-xs text-ink-muted leading-relaxed">{book.reader_review}</p>
+                  ) : (
+                    <p className="text-xs text-ink-muted/50 italic">리뷰 정보 없음</p>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* 책 소개 (있을 경우) */}
               {book.book_intro && !book.recommendation_reason && (
