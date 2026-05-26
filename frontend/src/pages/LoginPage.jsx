@@ -110,7 +110,20 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-ink-muted mt-8">좋은 책이 당신을 기다리고 있습니다.</p>
+        <div className="flex items-center gap-3 mt-4">
+          <div className="flex-1 h-px bg-ink/10" />
+          <span className="text-xs text-ink-muted">또는</span>
+          <div className="flex-1 h-px bg-ink/10" />
+        </div>
+
+        <button
+          onClick={() => navigate('/chat')}
+          className="mt-4 w-full border border-ink/15 text-ink-muted py-3 rounded text-sm hover:bg-paper-2 transition-colors"
+        >
+          로그인 없이 시작하기
+        </button>
+
+        <p className="text-center text-xs text-ink-muted mt-6">좋은 책이 당신을 기다리고 있습니다.</p>
       </div>
     </div>
   );

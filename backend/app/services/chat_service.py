@@ -302,7 +302,7 @@ class ChatService:
             sl.log_recommendation(
                 rag_query    = pipeline.rag_query or {},
                 pipeline_log = PipelineLog(
-                    bm25_count        = len(pipeline.bm25_results),
+                    bm25_count        = len(pipeline.hybrid_results),
                     reranker_count    = len(pipeline.reranked_results),
                     availability_count= len(pipeline.availability_index),
                     elapsed_ms        = {"rag_query": 0, "bm25": 0, "reranker": 0,

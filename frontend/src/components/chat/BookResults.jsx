@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 /**
@@ -6,23 +7,27 @@ import { useNavigate } from 'react-router-dom';
  * props:
  *   results - search_results: [{
  *     isbn, title, author, publisher,
- *     cover_url, book_intro, recommendation_reason,
+ *     cover_url, book_intro, book_index_text, recommendation_reason,
+ *     reader_review, review_score, page, publish_date,
  *     loan_available, has_book, final_rank, final_score
  *   }]
  *   availabilityIndex - (선택) availability_index: {isbn: {has_book, loan_available}}
- *                       book 객체 안에 이미 포함된 경우 우선 사용
  */
 export default function BookResults({ results = [], availabilityIndex = {} }) {
   const navigate = useNavigate();
+  const [expandedIsbn, setExpandedIsbn] = useState(null);
 
   if (results.length === 0) return null;
+
+  const toggleExpand = (isbn) => {
+    setExpandedIsbn(prev => (prev === isbn ? null : isbn));
+  };
 
   return (
     <div className="mt-3">
       <p className="text-[10px] tracking-widest uppercase text-ink-muted mb-3">추천 도서</p>
       <div className="flex flex-col gap-3">
         {results.map((book, i) => {
-          // availability: book 객체 안에 있으면 우선 사용, 없으면 availabilityIndex fallback
           const avail = availabilityIndex[book.isbn] ?? {};
           const loanAvailable = book.loan_available ?? avail.loan_available;
           const hasBook = book.has_book ?? avail.has_book;
@@ -30,20 +35,24 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
           const available = loanAvailable === 'Y';
           const inStock  = hasBook === 'Y';
           const checked  = loanAvailable !== undefined && loanAvailable !== '-';
+          const isExpanded = expandedIsbn === book.isbn;
 
           return (
             <div
               key={book.isbn ?? i}
               className="bg-white border border-ink/10 rounded-xl overflow-hidden"
             >
-              {/* 상단: 표지 + 기본 정보 */}
-              <div className="flex gap-3 p-4">
+              {/* 상단: 표지 + 기본 정보 — 클릭 시 상세 토글 */}
+              <div
+                className="flex gap-3 p-4 cursor-pointer hover:bg-paper-2/40 transition-colors"
+                onClick={() => toggleExpand(book.isbn ?? i)}
+              >
                 {/* 책 표지 */}
                 {book.cover_url ? (
                   <img
                     src={book.cover_url}
                     alt={book.title}
-                    className="w-16 h-22 object-cover rounded flex-shrink-0 shadow-sm"
+                    className="w-16 object-cover rounded flex-shrink-0 shadow-sm"
                     style={{ height: '88px' }}
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
@@ -61,10 +70,16 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
                       <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">
                         {book.title || `ISBN ${book.isbn}`}
                       </p>
-                      {/* 순위 뱃지 */}
-                      <span className="w-5 h-5 rounded-full bg-paper-2 flex items-center justify-center text-[10px] font-bold text-ink-muted flex-shrink-0 mt-0.5">
-                        {book.final_rank ?? i + 1}
-                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                        {/* 순위 뱃지 */}
+                        <span className="w-5 h-5 rounded-full bg-paper-2 flex items-center justify-center text-[10px] font-bold text-ink-muted">
+                          {book.final_rank ?? i + 1}
+                        </span>
+                        {/* 펼치기 화살표 */}
+                        <span className="text-ink-muted/50 text-xs">
+                          {isExpanded ? '▲' : '▼'}
+                        </span>
+                      </div>
                     </div>
                     {book.author && (
                       <p className="text-xs text-ink-muted mt-0.5 truncate">{book.author}</p>
@@ -75,11 +90,13 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
                   </div>
 
                   {/* 별점 */}
-                  {book.review_score != null && (
+                  {book.review_score != null ? (
                     <p className="text-xs text-amber-500 mt-0.5">
                       {'★'.repeat(Math.floor(book.review_score))}{'☆'.repeat(5 - Math.floor(book.review_score))}
                       <span className="text-ink-muted ml-1">{book.review_score.toFixed(1)}</span>
                     </p>
+                  ) : (
+                    <p className="text-xs text-ink-muted/50 mt-0.5">{'☆'.repeat(5)}<span className="ml-1">—</span></p>
                   )}
 
                   {/* 대출 가능 여부 */}
@@ -115,24 +132,62 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
                 </div>
               )}
 
-              {/* 독자 리뷰 */}
-              {book.reader_review && (
-                <div className="px-4 pb-4">
-                  <div className="rounded-lg p-3 border border-ink/8 bg-white">
+              {/* ── 상세 펼치기 영역 ── */}
+              {isExpanded && (
+                <div className="border-t border-ink/8 px-4 py-4 flex flex-col gap-3 bg-paper-2/20">
+
+                  {/* 책 소개 */}
+                  {book.book_intro && (
+                    <div>
+                      <p className="text-[11px] font-medium text-ink-muted mb-1">📖 책 소개</p>
+                      <p className="text-xs text-ink leading-relaxed">{book.book_intro}</p>
+                    </div>
+                  )}
+
+                  {/* 목차 */}
+                  {book.book_index_text ? (
+                    <div>
+                      <p className="text-[11px] font-medium text-ink-muted mb-1">📋 목차</p>
+                      <p className="text-xs text-ink-muted leading-relaxed whitespace-pre-line">
+                        {book.book_index_text}
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-[11px] font-medium text-ink-muted mb-1">📋 목차</p>
+                      <p className="text-xs text-ink-muted/50 italic">목차 정보 없음</p>
+                    </div>
+                  )}
+
+                  {/* 독자 리뷰 */}
+                  <div>
                     <p className="text-[11px] font-medium text-ink-muted mb-1">📝 독자 리뷰</p>
-                    <p className="text-xs text-ink-muted leading-relaxed">
-                      {book.reader_review}
-                    </p>
+                    {book.reader_review ? (
+                      <p className="text-xs text-ink-muted leading-relaxed">{book.reader_review}</p>
+                    ) : (
+                      <p className="text-xs text-ink-muted/50 italic">리뷰 정보 없음</p>
+                    )}
+                  </div>
+
+                  {/* 출판 정보 */}
+                  <div className="flex gap-4 text-xs text-ink-muted/70">
+                    {book.page && <span>📄 {book.page}쪽</span>}
+                    {book.publish_date && <span>📅 {book.publish_date}</span>}
                   </div>
                 </div>
               )}
 
-              {/* 책 소개 (있을 경우) */}
-              {book.book_intro && !book.recommendation_reason && (
+              {/* 접힌 상태에서 독자 리뷰 (기존 유지) */}
+              {!isExpanded && (
                 <div className="px-4 pb-4">
-                  <p className="text-xs text-ink-muted leading-relaxed line-clamp-3">
-                    {book.book_intro}
-                  </p>
+                  <div className="rounded-lg p-3 border border-ink/8 bg-white">
+                    <p className="text-[11px] font-medium text-ink-muted mb-1">📝 독자 리뷰</p>
+                    {book.reader_review ? (
+                      <p className="text-xs text-ink-muted leading-relaxed">{book.reader_review}</p>
+                    ) : (
+                      <p className="text-xs text-ink-muted/50 italic">리뷰 정보 없음</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

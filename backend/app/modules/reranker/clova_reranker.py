@@ -105,10 +105,22 @@ def attach_book_metadata(
 
     for candidate in search_candidates:
         isbn = str(candidate.get("isbn") or "").strip()
+        # PostgreSQL에 없는 ISBN은 빈 dict → ES 필드로 보완
+        book_meta = book_index.get(isbn) or {
+            "isbn"        : isbn,
+            "title"       : candidate.get("title", ""),
+            "author"      : candidate.get("author", ""),
+            "publisher"   : candidate.get("publisher", ""),
+            "publish_date": str(candidate.get("publish_date") or ""),
+            "page"        : candidate.get("page"),
+            "book_intro"  : (candidate.get("book_intro") or "")[:400],
+            "book_index"  : "",
+            "category"    : ", ".join(candidate.get("large_cate") or []),
+        }
         results.append({
             **candidate,
             "isbn": isbn,
-            "book": book_index[isbn],
+            "book": book_meta,
         })
 
     return results
@@ -351,18 +363,21 @@ def rerank_by_clova_score(
         )
 
         reranked_books.append({
-            "isbn": isbn,
-            "title": book.get("title"),
-            "author": book.get("author"),
-            "publisher": book.get("publisher"),
-            "category": book.get("category"),
-            "page": book.get("page"),
-            "original_rank": item.get("rank"),
-            "raw_retrieval_score": raw_retrieval_score,
-            "retrieval_score": round(retrieval_score, 4),
-            "clova_relevance_score": round(clova_relevance_score, 4),
-            "final_score": round(final_score, 4),
-            "evidence": make_evidence(clova_relevance_score),
+            # ES 원본 필드 전체 보존 (ori_cover_s, review, review_count 등)
+            **{k: v for k, v in item.items() if k != "book"},
+            # 메타데이터: PostgreSQL 우선, 없으면 ES fallback
+            "isbn"                  : isbn,
+            "title"                 : book.get("title") or item.get("title", ""),
+            "author"                : book.get("author") or item.get("author", ""),
+            "publisher"             : book.get("publisher") or item.get("publisher", ""),
+            "page"                  : book.get("page") or item.get("page"),
+            # 리랭킹 결과 필드
+            "original_rank"         : item.get("rank"),
+            "raw_retrieval_score"   : raw_retrieval_score,
+            "retrieval_score"       : round(retrieval_score, 4),
+            "clova_relevance_score" : round(clova_relevance_score, 4),
+            "final_score"           : round(final_score, 4),
+            "evidence"              : make_evidence(clova_relevance_score),
         })
 
     reranked_books.sort(key=lambda x: x["final_score"], reverse=True)

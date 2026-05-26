@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { checkHealth, getSessions, deleteSession, getSession } from '../../services';
 
-export default function Sidebar({ userName, onRestart, onFeedback, onProfile, onLoadSession, currentSessionId }) {
+export default function Sidebar({ userName, isGuest = false, onRestart, onFeedback, onProfile, onLoadSession, currentSessionId }) {
   const [isHealthy, setIsHealthy] = useState(null);
   const [sessions, setSessions] = useState([]);
 
@@ -10,14 +10,14 @@ export default function Sidebar({ userName, onRestart, onFeedback, onProfile, on
   }, []);
 
   const loadSessions = useCallback(() => {
+    if (isGuest) return;
     getSessions().then(setSessions).catch(() => setSessions([]));
-  }, []);
+  }, [isGuest]);
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
 
-  // 새 세션 생성 시 목록 갱신
   useEffect(() => {
     if (currentSessionId) loadSessions();
   }, [currentSessionId, loadSessions]);
@@ -74,9 +74,21 @@ export default function Sidebar({ userName, onRestart, onFeedback, onProfile, on
         </button>
       </div>
 
-      {/* 세션 목록 (스크롤 영역) */}
+      {/* 세션 목록 or 게스트 안내 */}
       <div className="flex-1 overflow-y-auto px-4 pb-2">
-        {sessions.length === 0 ? (
+        {isGuest ? (
+          <div className="mx-1 mt-3 rounded-lg border border-white/10 bg-white/5 px-4 py-4">
+            <p className="text-xs text-paper/60 leading-relaxed mb-3">
+              로그인하면 대화 기록이 저장되고 이어서 볼 수 있어요
+            </p>
+            <button
+              onClick={onProfile}
+              className="w-full text-xs text-paper/80 border border-white/20 rounded-lg py-2 hover:bg-white/10 transition-colors"
+            >
+              로그인 / 회원가입
+            </button>
+          </div>
+        ) : sessions.length === 0 ? (
           <p className="text-xs text-paper/25 px-3 py-4">아직 저장된 대화가 없어요</p>
         ) : (
           Object.entries(groups).map(([label, items]) =>
@@ -118,9 +130,11 @@ export default function Sidebar({ userName, onRestart, onFeedback, onProfile, on
           <button onClick={onFeedback} className="text-left text-[12.5px] text-paper/60 px-3 py-2 rounded-lg hover:bg-white/7 hover:text-paper transition-colors">
             ✦ 피드백 남기기
           </button>
-          <button onClick={onProfile} className="text-left text-[12.5px] text-paper/60 px-3 py-2 rounded-lg hover:bg-white/7 hover:text-paper transition-colors">
-            ◉ 내 프로필
-          </button>
+          {!isGuest && (
+            <button onClick={onProfile} className="text-left text-[12.5px] text-paper/60 px-3 py-2 rounded-lg hover:bg-white/7 hover:text-paper transition-colors">
+              ◉ 내 프로필
+            </button>
+          )}
         </div>
         {userName && (
           <p className="text-xs text-paper/40 px-3 mb-2">안녕하세요, {userName}님</p>
