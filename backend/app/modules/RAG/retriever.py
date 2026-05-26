@@ -12,7 +12,8 @@ import json
 try:
     from sentence_transformers import SentenceTransformer
     _SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
+except Exception:
+    # ImportError 외에도 NumPy/torch 버전 충돌로 인한 NameError 등 포함
     SentenceTransformer = None  # type: ignore
     _SENTENCE_TRANSFORMERS_AVAILABLE = False
 
