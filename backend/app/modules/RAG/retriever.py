@@ -12,8 +12,13 @@ import json
 try:
     from sentence_transformers import SentenceTransformer
     _SENTENCE_TRANSFORMERS_AVAILABLE = True
-except Exception:
+except Exception as _st_err:
     # ImportError 외에도 NumPy/torch 버전 충돌로 인한 NameError 등 포함
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "sentence_transformers 로드 실패 (%s: %s) — 로컬 임베딩 비활성화",
+        type(_st_err).__name__, _st_err,
+    )
     SentenceTransformer = None  # type: ignore
     _SENTENCE_TRANSFORMERS_AVAILABLE = False
 
