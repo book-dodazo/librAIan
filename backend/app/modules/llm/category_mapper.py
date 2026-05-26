@@ -169,6 +169,39 @@ _FINE_TO_COARSE_NORMALIZED: dict[str, str] = {
     _normalize(k): v for k, v in _FINE_TO_COARSE.items()
 }
 
+# ── 수동 별칭 테이블 ──────────────────────────────────────────
+# LLM이 자유 입력어로 추출하는 용어 → 카테고리 트리 정규 중분류 명시 매핑
+# 부분 매칭보다 우선 적용되어 오매핑을 방지합니다.
+# 예) "경제" → 부분 매칭 시 '취업/수험서' 하위 '경제/금융/회계자격증'으로 잘못 매핑되는 문제 방지
+_MANUAL_ALIASES: dict[str, str] = {
+    # 경제/경영
+    "경제"      : "경제일반",
+    "투자"      : "재테크/금융",
+    "재테크"    : "재테크/금융",
+    "금융"      : "재테크/금융",
+    "주식"      : "재테크/금융",
+    "부동산투자": "재테크/금융",
+    "경영"      : "경영일반",
+    "마케팅"    : "마케팅/광고/고객",
+    "창업"      : "유통/창업",
+    "세무"      : "세무/회계",
+    "회계"      : "세무/회계",
+    # 인문
+    "심리"      : "심리학",
+    "철학"      : "서양철학",
+    "역사"      : "한국사",
+    # 과학
+    "물리"      : "물리학",
+    "수학"      : "수학",
+    "화학"      : "화학",
+    "생물"      : "생명과학",
+    # 소설
+    "소설"      : "한국소설",
+    "SF"        : "SF",
+    # 자기계발
+    "자기계발"  : "성공/처세",
+}
+
 
 def get_coarse_category(fine: str) -> Optional[str]:
     """
@@ -259,7 +292,14 @@ def get_canonical_fine(free_form: str) -> Optional[str]:
         logger.debug("중분류 공백 정규화 매칭: %s → %s", free_form, canonical)
         return canonical
 
-    # 3. 부분 매칭 (2글자 이상, 정규화 기준)
+    # 3. 수동 별칭 확인 (부분 매칭 오매핑 방지 — JSON 순서 의존성 제거)
+    alias_target = _MANUAL_ALIASES.get(free_form) or _MANUAL_ALIASES.get(normalized)
+    if alias_target and alias_target in _FINE_TO_COARSE:
+        logger.debug("중분류 별칭 매핑: %s → %s", free_form, alias_target)
+        return alias_target
+
+    # 4. 부분 매칭 (2글자 이상, 정규화 기준)
+    # 주의: JSON 순서에 의존하므로 별칭 테이블에 없는 경우만 여기까지 도달
     if len(normalized) >= 2:
         for fine_key in _FINE_TO_COARSE:
             norm_key = _normalize(fine_key)

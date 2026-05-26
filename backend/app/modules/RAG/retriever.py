@@ -9,7 +9,12 @@ from pathlib import Path
 from app.core.config import settings
 from dotenv import load_dotenv
 import json
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+    _SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SentenceTransformer = None  # type: ignore
+    _SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 # 함수 사용법
 # full_bm25(result)
@@ -31,7 +36,7 @@ URL = "https://clovastudio.stream.ntruss.com/testapp/v1/api-tools/embedding/v2/"
 CLOVA_API_KEY = settings.CLOVA_API_KEY
 
 es = Elasticsearch(
-    "https://localhost:9200",
+    settings.ELASTIC_URL,
     basic_auth=(
         settings.ELASTIC_USER,
         settings.ELASTIC_PASSWORD
@@ -90,6 +95,11 @@ def get_clova_embedding(text, max_retries=10, timeout=30):
 _embedding_models = {}
 
 def load_embedding_model(model_name):
+    if not _SENTENCE_TRANSFORMERS_AVAILABLE:
+        raise ImportError(
+            "sentence_transformers 패키지가 설치되지 않았습니다. "
+            "pip install sentence-transformers 로 설치하세요."
+        )
     if model_name not in _embedding_models:
         if model_name == "bge_m3_ko":
             _embedding_models[model_name] = SentenceTransformer("BAAI/bge-m3")
@@ -338,6 +348,39 @@ def apply_dense_disliked_penalty(
 
     return results
 
+# ── category_tree.json 내부 coarse 이름 → ES large_cate 실제 값 번역 ──────────
+# category_tree 기준으로 매핑된 coarse가 ES 인덱스의 large_cate 값과
+# 다를 경우 검색 결과 0건이 되므로 여기서 일괄 변환한다.
+# 1-to-many 매핑(중/고등참고서 → 두 값)은 리스트로 표현.
+_COARSE_TO_ES: dict[str, str | list[str]] = {
+    "과학"           : "자연/과학",
+    "역사/문화"      : "역사",
+    "정치/사회"      : "사회/정치",
+    "건강"           : "건강/취미",
+    "취미/실용/스포츠": "건강/취미",
+    "가정/육아"      : "가정/요리",
+    "외국어"         : "국어/외국어",
+    "취업/수험서"    : "수험서/자격증",
+    "대학교재"       : "대학교재/전문서적",
+    "어린이(초등)"   : "어린이",
+    "어린이ELT"      : "어린이",
+    "유아(0~7세)"    : "유아",
+    "초등참고서"     : "초등학교 참고서",
+    "중/고등참고서"  : ["중학교 참고서", "고등학교 참고서"],
+}
+
+def translate_coarse_to_es(categories: list[str]) -> list[str]:
+    """내부 coarse 이름 목록을 ES large_cate 실제 값으로 변환한다."""
+    result: list[str] = []
+    for c in categories:
+        mapped = _COARSE_TO_ES.get(c, c)
+        if isinstance(mapped, list):
+            result.extend(mapped)
+        else:
+            result.append(mapped)
+    return result
+
+
 # 성인 사용자는 유아나 청소년 카테고리 제외
 ADULT_EXCLUDE_CATEGORIES = [
     "고등학교 참고서",
@@ -435,7 +478,7 @@ def full_bm25(
     score_boost = result.get("score_boost", {})
     constraints = result.get("constraints", {})
     
-    coarse_categories = to_list(filters.get("cate_depth1"))
+    coarse_categories = translate_coarse_to_es(to_list(filters.get("cate_depth1")))
     anchor_title = filters.get("title")
     anchor_author = filters.get("author")
     mid_filter_categories = to_list(filters.get("cate_depth2"))
@@ -738,7 +781,7 @@ def chunk_bm25(
     score_boost = result.get("score_boost", {})
     constraints = result.get("constraints", {})
 
-    coarse_categories = to_list(filters.get("cate_depth1"))
+    coarse_categories = translate_coarse_to_es(to_list(filters.get("cate_depth1")))
     anchor_title = filters.get("title")
     anchor_author = filters.get("author")
     mid_filter_categories = to_list(filters.get("cate_depth2"))
@@ -1051,7 +1094,7 @@ def full_dense(
     constraints = result.get("constraints", {})
     score_boost = result.get("score_boost", {})
 
-    coarse_categories = to_list(filters.get("cate_depth1"))
+    coarse_categories = translate_coarse_to_es(to_list(filters.get("cate_depth1")))
     anchor_title = filters.get("title")
     anchor_author = filters.get("author")
     mid_filter_categories = to_list(filters.get("cate_depth2"))
@@ -1302,7 +1345,7 @@ def chunk_dense(
     constraints = result.get("constraints", {})
     score_boost = result.get("score_boost", {})
     
-    coarse_categories = to_list(filters.get("cate_depth1"))
+    coarse_categories = translate_coarse_to_es(to_list(filters.get("cate_depth1")))
     anchor_title = filters.get("title")
     anchor_author = filters.get("author")
     mid_filter_categories = to_list(filters.get("cate_depth2"))
@@ -1659,7 +1702,8 @@ def full_hybrid(
         size=dense_candidate_size,
         num_candidates=num_candidates,
         small_category_embeddings=small_category_embeddings,
-        embedding_field=embedding_field
+        embedding_field=embedding_field,
+        embedding_model=embedding_model
     )
 
     merged = {}
@@ -1788,7 +1832,8 @@ def chunk_hybrid(
         num_candidates=num_candidates,
         top_k_per_book=top_k_per_book,
         small_category_embeddings=small_category_embeddings,
-        embedding_field=embedding_field
+        embedding_field=embedding_field,
+        embedding_model=embedding_model
     )
 
     merged = {}

@@ -21,13 +21,12 @@ services:
       DB_PORT: "5432"
       DB_NAME: book_db
       DB_USER: ${DB_USER}
+      USE_POSTGRES: "true"
       AWS_PUBLIC_IP: "54.175.156.56"
       APP_ENV: production
       LOG_LEVEL: INFO
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks:
-      - librain_net
     restart: unless-stopped
 
   frontend:
@@ -37,10 +36,4 @@ services:
       - "80:80"
     depends_on:
       - backend
-    networks:
-      - librain_net
     restart: unless-stopped
-
-networks:
-  librain_net:
-    name: librain_default

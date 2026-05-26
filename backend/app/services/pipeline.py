@@ -79,12 +79,11 @@ class PipelineResult:
     @property
     def final_results(self) -> list[dict]:
         """
-        최종 결과 반환 — 3-시나리오 필터링
+        최종 결과 반환 — 항상 최대 3건 보장
 
-        availability_index 없음 → Top3 그대로 반환
-        [Scenario C] availability_required=True → 대출가능 Top3만
-        [Scenario A] 1등 대출가능              → 대출가능 Top3만
-        [Scenario B] 1등 대출불가              → 대출가능 Top3 + 1등 추가
+        availability_index 없음     → Top3 그대로 반환
+        [Scenario C] availability_required=True → 대출가능 우선, 부족하면 상위 랭킹으로 보충
+        [Scenario A/B] 그 외        → 대출가능 우선 Top3, 부족하면 상위 랭킹으로 보충
         """
         base = self.reranked_results if self.reranked_results else self.bm25_results
 
@@ -102,22 +101,19 @@ class PipelineResult:
                 "loan_available": avail.get("loan_available", "-"),
             })
 
-        available = [b for b in books_with_avail if b.get("loan_available") == "Y"]
-        top3      = available[:3]
+        available     = [b for b in books_with_avail if b.get("loan_available") == "Y"]
+        not_available = [b for b in books_with_avail if b.get("loan_available") != "Y"]
 
-        # [Scenario C]
+        # [Scenario C] 대출가능 필수 — 대출가능만, 부족해도 3건 이하로 반환
         if self.availability_required:
-            return top3
+            return available[:3]
 
-        # [Scenario A] 1등이 대출가능이면 Top3만
-        rank1 = books_with_avail[0] if books_with_avail else None
-        if not rank1 or rank1.get("loan_available") == "Y":
-            return top3
-
-        # [Scenario B] 1등이 대출불가면 Top3 + 1등 추가
-        result = list(top3)
-        if rank1 not in result:
-            result.append(rank1)
+        # [Scenario A/B] 대출가능 우선, 부족하면 상위 랭킹으로 보충해서 항상 3건
+        result = list(available[:3])
+        for book in not_available:
+            if len(result) >= 3:
+                break
+            result.append(book)
         return result
 
 
@@ -170,6 +166,8 @@ def run_bm25_search(
     모듈이 없으면 빈 리스트 반환 (graceful skip).
     """
     try:
+        logger.info("BM25 검색 시작 — keyword_query=%s filters=%s",
+                    rag_query.get("keyword_query"), rag_query.get("filters"))
         results = full_bm25(
             result                   = rag_query
         )

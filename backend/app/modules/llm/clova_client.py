@@ -99,15 +99,16 @@ async def chat_complete(
 
     full_messages = [{"role": "system", "content": system_prompt}] + messages
 
-    # HCX-007 등 max_tokens 미지원 모델은 파라미터 생략
-    extra = {} if max_tokens is None else {"max_tokens": max_tokens}
+    # CLOVA API는 camelCase maxTokens를 extra_body로 전달해야 함
+    # (OpenAI 호환 엔드포인트지만 max_tokens 대신 maxTokens 사용)
+    extra_body = {"maxTokens": max_tokens} if max_tokens is not None else {}
 
     try:
         response = await _client.chat.completions.create(
             model=model or settings.CLOVA_MODEL,
             messages=full_messages,
             temperature=temperature,
-            **extra,
+            extra_body=extra_body,
         )
         return response.choices[0].message.content or ""
 
