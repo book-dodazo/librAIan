@@ -21,7 +21,7 @@
 
 현재 단계:
     [2] run_rag_query     → RAG 쿼리 생성 (slot/rag_query_builder.py)
-    [3] run_bm25_search   → BM25 검색 (modules/RAG/BM25.py)
+    [3] run_hybrid_search   → Hybrid 검색 (modules/RAG/retriever.py)
     [4] run_reranker      → CLOVA Reranker (models/clova_reranker.py)
     [5] run_availability  → 대출 가능 여부 조회 (models/loan_availability.py)
 """
@@ -33,7 +33,7 @@ from typing import Any, Optional
 from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext
 from app.modules.RAG.anchor_book_pipeline import run_anchor_pipeline
-from app.modules.RAG.retriever import full_bm25
+from app.modules.RAG.retriever import full_hybrid
 from app.modules.reranker.clova_reranker import (
             call_clova_reranker,
             create_payload_and_rerank,
@@ -58,9 +58,9 @@ class PipelineResult:
     # [2-1] Anchor 기반 query rewrite 결과
     anchor_rewritten: bool = False
 
-    # [3] BM25 검색 결과
+    # [3] Hyrbid 검색 결과
     # 형태: [{"rank": 1, "isbn": "...", "score": 1.23}, ...]
-    bm25_results: list[dict] = field(default_factory=list)
+    hybrid_results: list[dict] = field(default_factory=list)
 
     # [4] Reranking 결과
     # 형태: [{"isbn": "...", "title": "...", "final_rank": 1, "final_score": 0.95, ...}, ...]
@@ -85,7 +85,7 @@ class PipelineResult:
         [Scenario C] availability_required=True → 대출가능 우선, 부족하면 상위 랭킹으로 보충
         [Scenario A/B] 그 외        → 대출가능 우선 Top3, 부족하면 상위 랭킹으로 보충
         """
-        base = self.reranked_results if self.reranked_results else self.bm25_results
+        base = self.reranked_results if self.reranked_results else self.hybrid_results
 
         if not self.availability_index:
             return base[:3]
@@ -153,37 +153,35 @@ def run_anchor_query_rewrite(rag_query: dict[str, Any]) -> tuple[dict[str, Any],
         logger.error("Anchor 기반 query rewrite 실패: %s", e, exc_info=True)
         return rag_query, False
 
-def run_bm25_search(
+def run_hybrid_search(
     rag_query                : dict[str, Any],
     small_category_embeddings: Optional[dict] = None,
-    index_name               : str = "book_bm25_no_review",
+    index_name               : str = "books_review_full_100000",
     size                     : int = 20,
 ) -> list[dict]:
     """
-    [3단계] BM25 검색 (A파트 연동)
+    [3단계] Hybrid 검색 (A파트 연동)
 
-    app/modules/RAG/BM25.py의 search_bm25_with_cate()를 호출합니다.
+    app/modules/RAG/retriever.py의 search_bm25_with_cate()를 호출합니다.
     모듈이 없으면 빈 리스트 반환 (graceful skip).
     """
     try:
-        logger.info("BM25 검색 시작 — keyword_query=%s filters=%s",
-                    rag_query.get("keyword_query"), rag_query.get("filters"))
-        results = full_bm25(
+        results = full_hybrid(
             result                   = rag_query
         )
-        logger.info("BM25 검색 완료: %d건", len(results))
+        logger.info("Hybrid 검색 완료: %d건", len(results))
         return results
 
     except ImportError:
-        logger.warning("BM25 모듈 없음 (app/modules/RAG/retriever.py) — 검색 스킵")
+        logger.warning("Hybrid 모듈 없음 (app/modules/RAG/retriever.py) — 검색 스킵")
         return []
     except Exception as e:
-        logger.error("BM25 검색 실패: %s", e, exc_info=True)
+        logger.error("Hybrid 검색 실패: %s", e, exc_info=True)
         return []
 
 
 def run_reranker(
-    bm25_results : list[dict],
+    hybrid_results : list[dict],
     rag_query    : dict[str, Any],
     clova_api_key: Optional[str] = None,
 ) -> list[dict]:
@@ -193,11 +191,11 @@ def run_reranker(
     app/modules/reranker/clova_reranker.py의
     create_payload_and_rerank() + call_clova_reranker()를 호출합니다.
 
-    clova_api_key 없으면 payload 생성까지만 하고 BM25 결과 그대로 반환.
+    clova_api_key 없으면 payload 생성까지만 하고 Hybrid 결과 그대로 반환.
     모듈이 없으면 빈 리스트 반환 (graceful skip).
 
     Args:
-        bm25_results : run_bm25_search()의 결과
+        Hybrid_results : run_Hybrid_search()의 결과
         rag_query    : RAG 쿼리 딕셔너리 (query 생성에 사용)
         clova_api_key: CLOVA API 키 (없으면 reranking 스킵)
 
@@ -205,7 +203,7 @@ def run_reranker(
         재순위된 도서 목록
         [{"isbn": "...", "title": "...", "final_rank": 1, "final_score": 0.95, ...}, ...]
     """
-    if not bm25_results:
+    if not hybrid_results:
         return []
 
     try:
@@ -215,13 +213,13 @@ def run_reranker(
         api_key = clova_api_key or os.getenv("CLOVA_API_KEY", "")
 
         if not api_key:
-            logger.warning("CLOVA_API_KEY 없음 — Reranking 스킵, BM25 결과 그대로 사용")
+            logger.warning("CLOVA_API_KEY 없음 — Reranking 스킵, Hybrid 결과 그대로 사용")
             return []
 
         # Step 1: payload 생성
         prepared = create_payload_and_rerank(
             reconstructed_session = reconstructed_session,
-            search_candidates     = bm25_results,
+            search_candidates     = hybrid_results,
             clova_response        = None,
         )
 
@@ -234,7 +232,7 @@ def run_reranker(
         # Step 3: 최종 재정렬
         final_result = create_payload_and_rerank(
             reconstructed_session = reconstructed_session,
-            search_candidates     = bm25_results,
+            search_candidates     = hybrid_results,
             clova_response        = clova_response,
         )
 
@@ -328,8 +326,8 @@ async def run_full_pipeline(
 
     )
 
-    # [3] BM25 검색
-    result.bm25_results = run_bm25_search(
+    # [3] Hybrid 검색
+    result.hybrid_results = run_hybrid_search(
         rag_query                = result.rag_query,
         small_category_embeddings= small_category_embeddings,
     )
@@ -346,12 +344,12 @@ async def run_full_pipeline(
 
     # [4] CLOVA Reranker
     result.reranked_results = run_reranker(
-        bm25_results = result.bm25_results,
+        hybrid_results = result.hybrid_results,
         rag_query    = result.rag_query,
     )
 
     # [5] 대출 가능 여부 조회 — 리랭킹 Top10 대상
-    candidate_books = (result.reranked_results or result.bm25_results)[:10]
+    candidate_books = (result.reranked_results or result.hybrid_results)[:10]
     result.availability_required = context.slots.availability_required
     result.availability_index = run_availability(
         books        = candidate_books,
@@ -360,8 +358,8 @@ async def run_full_pipeline(
     )
 
     logger.info(
-        "파이프라인 완료: bm25=%d건 reranked=%d건 availability=%d건 availability result=%s",
-        len(result.bm25_results),
+        "파이프라인 완료: Hybrid=%d건 reranked=%d건 availability=%d건 availability result=%s",
+        len(result.hybrid_results),
         len(result.reranked_results),
         len(result.availability_index),
         result.availability_index
