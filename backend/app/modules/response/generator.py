@@ -148,10 +148,14 @@ def _build_request_analysis(rag_query: dict, original_query: str) -> str:
 
     anchors = rag_query.get("anchors")
     if anchors:
-        anchor_type = anchors.get("type", "")
-        anchor_val  = anchors.get("value", "")
-        if anchor_val:
-            parts.append(f"기준 {anchor_type}: {anchor_val}")
+        # anchors가 list인 경우(첫 번째 항목) 또는 dict인 경우 모두 처리
+        if isinstance(anchors, list):
+            anchors = anchors[0] if anchors else None
+        if anchors and isinstance(anchors, dict):
+            anchor_type = anchors.get("type", "")
+            anchor_val  = anchors.get("value", "")
+            if anchor_val:
+                parts.append(f"기준 {anchor_type}: {anchor_val}")
 
     return "\n".join(f"- {p}" for p in parts)
 
