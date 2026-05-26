@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 의존성 먼저 복사 (레이어 캐시 활용)
 COPY requirements.txt .
+# torch CPU 전용 먼저 설치 (CUDA 없는 슬림 이미지 → CPU 빌드로 이미지 크기 절감)
+RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 앱 코드 복사

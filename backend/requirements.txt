@@ -19,6 +19,8 @@ python-dotenv>=1.0.0
 jinja2==3.0.3
 requests
 numpy<2
+torch==2.2.2
+sentence-transformers>=2.6.0,<3.0
 starlette
 elasticsearch==8.19.0
 kiwipiepy

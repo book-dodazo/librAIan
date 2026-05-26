@@ -167,13 +167,22 @@ def run_hybrid_search(
     """
     try:
         results = full_hybrid(
-            result                   = rag_query
+            result                    = rag_query,
+            index_name                = index_name,
+            size                      = size,
+            small_category_embeddings = small_category_embeddings,
         )
         logger.info("Hybrid 검색 완료: %d건", len(results))
         return results
 
-    except ImportError:
-        logger.warning("Hybrid 모듈 없음 (app/modules/RAG/retriever.py) — 검색 스킵")
+    except ImportError as e:
+        # retriever.py 자체는 정상 import됨
+        # → 이 ImportError는 내부 의존성(sentence-transformers 등) 누락을 의미함
+        logger.warning(
+            "Hybrid 검색 의존성 누락 — 검색 스킵: %s "
+            "(requirements.txt에 sentence-transformers / torch 추가 필요)",
+            e,
+        )
         return []
     except Exception as e:
         logger.error("Hybrid 검색 실패: %s", e, exc_info=True)
@@ -252,18 +261,17 @@ def run_availability(
     books        : list[dict],
     lib_code     : Optional[str] = None,
     naru_api_key : Optional[str] = None,
-    required_only: bool = False,
 ) -> dict[str, dict]:
     """
     [5단계] 정보나루 API 대출 가능 여부 조회
 
     app/services/loan_availability.py의 check_books_availability()를 호출합니다.
+    availability_required 조건에 따른 필터링은 PipelineResult.final_results에서 처리합니다.
 
     Args:
         books        : final_results 후보 도서 목록
         lib_code     : 도서관 코드 (없으면 환경변수 NARU_LIB_CODE 사용)
         naru_api_key : 정보나루 API 키 (없으면 환경변수 NARU_API_KEY 사용)
-        required_only: True면 availability_required=True 일 때만 조회
 
     Returns:
         {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
