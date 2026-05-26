@@ -105,10 +105,22 @@ def attach_book_metadata(
 
     for candidate in search_candidates:
         isbn = str(candidate.get("isbn") or "").strip()
+        # PostgreSQL에 없는 ISBN은 빈 dict → ES 필드로 보완
+        book_meta = book_index.get(isbn) or {
+            "isbn"        : isbn,
+            "title"       : candidate.get("title", ""),
+            "author"      : candidate.get("author", ""),
+            "publisher"   : candidate.get("publisher", ""),
+            "publish_date": str(candidate.get("publish_date") or ""),
+            "page"        : candidate.get("page"),
+            "book_intro"  : (candidate.get("book_intro") or "")[:400],
+            "book_index"  : "",
+            "category"    : ", ".join(candidate.get("large_cate") or []),
+        }
         results.append({
             **candidate,
             "isbn": isbn,
-            "book": book_index[isbn],
+            "book": book_meta,
         })
 
     return results

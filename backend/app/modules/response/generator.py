@@ -22,6 +22,7 @@
     }
 """
 import asyncio
+import json
 import logging
 import re
 from typing import Any, Optional
@@ -280,15 +281,34 @@ async def generate_result_cards(
     for book, reason in zip(final_results, reasons):
         isbn   = book.get("isbn", "")
         detail = book_detail.get(isbn, {})
+
+        # ── 표지 URL: PostgreSQL → ES(ori_cover_s) fallback
+        cover_url = detail.get("cover_url") or book.get("ori_cover_s", "")
+
+        # ── 책 소개: PostgreSQL → ES fallback
+        book_intro = detail.get("book_intro") or (book.get("book_intro") or "")[:800]
+
+        # ── 독자 리뷰: PostgreSQL → ES(review + review_count) fallback
+        reader_review = detail.get("reader_review", "")
+        if not reader_review:
+            review_raw = book.get("review") or {}
+            if isinstance(review_raw, str):
+                try:
+                    review_raw = json.loads(review_raw)
+                except Exception:
+                    review_raw = {}
+            review_count = int(book.get("review_count") or 0)
+            reader_review = _build_reader_review(review_raw, review_count)
+
         cards.append({
             "isbn"                  : isbn,
             "title"                 : book.get("title", ""),
             "author"                : book.get("author", ""),
             "publisher"             : book.get("publisher", ""),
-            "cover_url"             : detail.get("cover_url", ""),
-            "book_intro"            : detail.get("book_intro", ""),
-            "reader_review"         : detail.get("reader_review", ""),
-            "review_score"          : detail.get("review_score"),
+            "cover_url"             : cover_url,
+            "book_intro"            : book_intro,
+            "reader_review"         : reader_review,
+            "review_score"          : detail.get("review_score"),  # ES에는 없으므로 PostgreSQL에 있을 때만
             "recommendation_reason" : reason,
             "loan_available"        : book.get("loan_available", "-"),
             "has_book"              : book.get("has_book", "-"),
