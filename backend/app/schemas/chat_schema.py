@@ -53,6 +53,9 @@ class ChatRequest(BaseModel):
     # inferred 확인 턴
     confirm_inferred: Optional[bool]            = Field(default=None)
 
+    # 세션 ID (이전 대화 이어가기)
+    session_id      : Optional[int]             = Field(default=None)
+
 
 
 class SlotChatResponse(BaseModel):
@@ -97,6 +100,9 @@ class SlotChatResponse(BaseModel):
     # 대출 가능 여부 조회 결과
     # 형태: {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
     availability_index    : Optional[dict[str, Any]]= None
+
+    # 세션
+    session_id            : Optional[int]           = None
 
     # 디버깅
     filled_slots          : list[str]               = Field(default_factory=list)

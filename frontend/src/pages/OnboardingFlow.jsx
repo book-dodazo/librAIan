@@ -9,7 +9,7 @@ const STEP_TITLES = {
   length:     '선호하는 책 분량이 있나요?',
   keywords:   '잘 안 읽게 되는 책은?',
   age:        '나이대를 알려주세요',
-  libraries:  '자주 가는 도서관이 있나요?',
+  libraries:  '자주 가는 도서관을 선택해주세요',
 };
 
 const STEP_HINTS = {
@@ -18,7 +18,7 @@ const STEP_HINTS = {
   length:     '없으면 건너뛰어도 됩니다',
   keywords:   '해당하는 것을 모두 선택하세요',
   age:        '건너뛰어도 됩니다',
-  libraries:  '지역명이나 도서관명으로 검색, 최대 2개',
+  libraries:  '지역명이나 도서관명으로 검색 (필수 1개, 최대 2개)',
 };
 
 const DISLIKED_KEYWORDS = [
@@ -53,36 +53,52 @@ const LENGTH_OPERATORS = [
   { key: 'around', label: '내외' },
 ];
 
-export default function OnboardingFlow({ onComplete, loading }) {
+// preferred_length 문자열 → {pages, op, noLength} 파싱
+function parseLengthString(str) {
+  if (!str) return { pages: '', op: 'lte', noLength: true };
+  const match = str.match(/^(\d+)p\s*(이하|이상|내외)/);
+  if (!match) return { pages: '', op: 'lte', noLength: true };
+  const opMap = { '이하': 'lte', '이상': 'gte', '내외': 'around' };
+  return { pages: match[1], op: opMap[match[2]] ?? 'lte', noLength: false };
+}
+
+export default function OnboardingFlow({ onComplete, loading, initialData = null }) {
   const [stepIndex, setStepIndex] = useState(0);
+
+  // initialData로부터 초기값 파싱
+  const initLength = parseLengthString(initialData?.preferred_length);
 
   // Step 1: books
   const [bookQuery, setBookQuery]       = useState('');
   const [bookResults, setBookResults]   = useState([]);
   const [bookSearching, setBookSearching] = useState(false);
-  const [selectedBooks, setSelectedBooks] = useState([]);
+  const [selectedBooks, setSelectedBooks] = useState(initialData?.recent_liked_books ?? []);
 
   // Step 2: categories
   const [categoryTree, setCategoryTree] = useState({});
   const [activeMain, setActiveMain]     = useState('');
-  const [selectedCats, setSelectedCats] = useState([]); // [{main, sub}]
+  const [selectedCats, setSelectedCats] = useState(initialData?.preferred_categories ?? []);
 
   // Step 3: length
-  const [lengthPages, setLengthPages] = useState('');
-  const [lengthOp, setLengthOp]       = useState('lte');
-  const [noLength, setNoLength]       = useState(false);
+  const [lengthPages, setLengthPages] = useState(initLength.pages);
+  const [lengthOp, setLengthOp]       = useState(initLength.op);
+  const [noLength, setNoLength]       = useState(initLength.noLength);
 
   // Step 4: keywords
-  const [selectedKws, setSelectedKws] = useState([]);
+  const [selectedKws, setSelectedKws] = useState(initialData?.disliked_keywords ?? []);
 
   // Step 5: age
-  const [selectedAge, setSelectedAge] = useState(null);
+  const [selectedAge, setSelectedAge] = useState(initialData?.age ?? null);
 
   // Step 6: libraries
   const [libQuery, setLibQuery]           = useState('');
   const [libResults, setLibResults]       = useState([]);
   const [libSearching, setLibSearching]   = useState(false);
-  const [selectedLibs, setSelectedLibs]   = useState([]);
+  const [selectedLibs, setSelectedLibs]   = useState(
+    (initialData?.frequent_libraries ?? []).map(l =>
+      typeof l === 'string' ? { name: l, code: '' } : l
+    )
+  );
 
   useEffect(() => {
     getCategories()
@@ -93,15 +109,28 @@ export default function OnboardingFlow({ onComplete, loading }) {
       .catch(() => {});
   }, []);
 
-  const bookTimer = useRef(null);
+  const bookTimer   = useRef(null);
+  const bookAbortRef = useRef(null);
+  const bookComposing = useRef(false);
+
   useEffect(() => {
     if (!bookQuery.trim()) { setBookResults([]); return; }
     clearTimeout(bookTimer.current);
     bookTimer.current = setTimeout(async () => {
+      // 이전 요청 취소
+      bookAbortRef.current?.abort();
+      const controller = new AbortController();
+      bookAbortRef.current = controller;
+
       setBookSearching(true);
-      try { setBookResults(await searchBooks(bookQuery)); }
-      catch { setBookResults([]); }
-      finally { setBookSearching(false); }
+      try {
+        const results = await searchBooks(bookQuery, controller.signal);
+        setBookResults(results);
+      } catch (e) {
+        if (e.name !== 'AbortError') setBookResults([]);
+      } finally {
+        setBookSearching(false);
+      }
     }, 400);
     return () => clearTimeout(bookTimer.current);
   }, [bookQuery]);
@@ -134,7 +163,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
       preferred_length,
       disliked_keywords:    selectedKws,
       age:                  selectedAge,
-      frequent_libraries:   selectedLibs.map(l => l.name),
+      frequent_libraries:   selectedLibs.map(l => ({ name: l.name, code: l.code || "" })),
     });
   };
 
@@ -180,7 +209,12 @@ export default function OnboardingFlow({ onComplete, loading }) {
   if (step === 'books') {
     const addBook = (book) => {
       if (!selectedBooks.find(b => b.title === book.title)) {
-        setSelectedBooks(p => [...p, book]);
+        // mid_cate 포함해서 저장 (온보딩 신호로 활용)
+        setSelectedBooks(p => [...p, {
+          title   : book.title,
+          author  : book.author,
+          mid_cate: Array.isArray(book.mid_cate) ? book.mid_cate : (book.mid_cate ? [book.mid_cate] : []),
+        }]);
       }
       setBookQuery('');
       setBookResults([]);
@@ -198,6 +232,11 @@ export default function OnboardingFlow({ onComplete, loading }) {
               type="text"
               value={bookQuery}
               onChange={e => setBookQuery(e.target.value)}
+              onCompositionStart={() => { bookComposing.current = true; }}
+              onCompositionEnd={e => {
+                bookComposing.current = false;
+                setBookQuery(e.target.value); // 조합 완료 후 최종값으로 검색
+              }}
               placeholder="책 제목으로 검색"
               className="w-full border border-ink/15 rounded px-4 py-2.5 text-sm bg-paper focus:outline-none focus:border-ink/40 placeholder:text-ink-muted"
             />
@@ -453,7 +492,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
   if (step === 'libraries') {
     const addLib = (lib) => {
       if (!selectedLibs.find(l => l.name === lib.name)) {
-        setSelectedLibs(p => [...p, lib]);
+        setSelectedLibs(p => [...p, { name: lib.name, address: lib.address, code: lib.code || "" }]);
       }
       setLibQuery('');
       setLibResults([]);
@@ -504,7 +543,7 @@ export default function OnboardingFlow({ onComplete, loading }) {
         </div>
 
         <div className="flex gap-2">
-          {selectedLibs.length === 0 ? <SkipBtn label="완료 (건너뛰기)" /> : <NextBtn label="완료" />}
+          <NextBtn label="완료" disabled={selectedLibs.length === 0} />
         </div>
       </div>
     );

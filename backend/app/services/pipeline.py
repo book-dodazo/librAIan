@@ -334,6 +334,16 @@ async def run_full_pipeline(
         small_category_embeddings= small_category_embeddings,
     )
 
+    # [3-1] Refinement: 이전에 추천한 책 후보에서 제거
+    if context.previous_result:
+        exclude_set = set(context.previous_result)
+        before = len(result.bm25_results)
+        result.bm25_results = [
+            r for r in result.bm25_results
+            if r.get("isbn") not in exclude_set
+        ]
+        logger.info("refinement 제외: %d → %d건", before, len(result.bm25_results))
+
     # [4] CLOVA Reranker
     result.reranked_results = run_reranker(
         bm25_results = result.bm25_results,

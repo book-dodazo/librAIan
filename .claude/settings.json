@@ -19,7 +19,9 @@
       "Bash(git merge *)",
       "Bash(grep -iE \"\\\\.log$|/logs?/|logs?\\\\.txt\")",
       "Bash(grep -iE \"libraiian\\\\.db|\\\\.db$\")",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(git commit *)",
+      "Bash(git rm *)"
     ]
   }
 }

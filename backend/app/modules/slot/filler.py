@@ -182,6 +182,7 @@ async def extract_slots(
         query       = query,
         slots_state = slots_full,
         turn        = context.turn_count,
+        asked_slots = list(context.asked_slots),
     )
     try:
         suf_raw = await chat_complete_json(
@@ -744,6 +745,18 @@ def _get_slots_to_ask_fallback(context: SessionContext) -> list[str]:
         empty.add("location")
 
     empty = empty - asked
+
+    # purpose 스킵: coarse가 _SKIP_PURPOSE_COARSE 계열이거나
+    # coarse가 없어도 fine에 소설/에세이 관련 표현이 있으면 제외
+    # (예: "소설책" → coarse=[] 이지만 purpose 묻지 않아야 함)
+    _FICTION_FINE_HINTS = {"소설", "소설책", "시", "에세이", "시/에세이", "만화"}
+    _fb_coarse = set(slots.topic.coarse or [])
+    _fb_fine   = set(slots.topic.fine   or [])
+    if (
+        _fb_coarse.issubset(_SKIP_PURPOSE_COARSE)
+        or (not _fb_coarse and _fb_fine & _FICTION_FINE_HINTS)
+    ):
+        empty.discard("purpose")
 
     if uncertainty:
         empty = {s for s in empty if uncertainty.get(s, "high") != "low"}

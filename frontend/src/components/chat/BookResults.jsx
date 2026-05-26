@@ -74,6 +74,14 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
                     )}
                   </div>
 
+                  {/* 별점 */}
+                  {book.review_score != null && (
+                    <p className="text-xs text-amber-500 mt-0.5">
+                      {'★'.repeat(Math.floor(book.review_score))}{'☆'.repeat(5 - Math.floor(book.review_score))}
+                      <span className="text-ink-muted ml-1">{book.review_score.toFixed(1)}</span>
+                    </p>
+                  )}
+
                   {/* 대출 가능 여부 */}
                   {checked ? (
                     <span
@@ -97,11 +105,23 @@ export default function BookResults({ results = [], availabilityIndex = {} }) {
 
               {/* 추천 이유 */}
               {book.recommendation_reason && (
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-3">
                   <div className="bg-paper-2/60 rounded-lg p-3">
                     <p className="text-[11px] font-medium text-ink-muted mb-1">추천 이유</p>
                     <p className="text-xs text-ink leading-relaxed">
                       {book.recommendation_reason}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 독자 리뷰 */}
+              {book.reader_review && (
+                <div className="px-4 pb-4">
+                  <div className="rounded-lg p-3 border border-ink/8 bg-white">
+                    <p className="text-[11px] font-medium text-ink-muted mb-1">📝 독자 리뷰</p>
+                    <p className="text-xs text-ink-muted leading-relaxed">
+                      {book.reader_review}
                     </p>
                   </div>
                 </div>

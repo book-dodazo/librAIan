@@ -8,7 +8,7 @@ import { SlotStatusBar, MessageBubble, ChatInput, EmptyState, LoadingBubble } fr
 export default function ChatPage() {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
-  const { messages, filledSlots, isLoading, sendMessage, selectChoice, confirmInferred, resetChat } = useChat();
+  const { messages, filledSlots, isLoading, sessionId, sendMessage, selectChoice, confirmInferred, resetChat, loadSession } = useChat();
 
   const user = getUser() ?? {};
 
@@ -31,13 +31,15 @@ export default function ChatPage() {
           navigate('/feedback', { state: { results: lastResultMsg?.search_results, availability: lastResultMsg?.availability_index } })
         }
         onProfile={() => navigate('/profile')}
+        onLoadSession={loadSession}
+        currentSessionId={sessionId}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex items-center justify-between px-8 py-5 border-b border-ink/10 bg-paper flex-shrink-0">
           <h1 className="font-serif text-base text-ink-soft">AI 도서 큐레이션</h1>
           <span className="text-xs tracking-widest uppercase px-3 py-1 border border-ink/10 rounded-full text-ink-muted">
-            책마루
+            librAIan
           </span>
         </div>
 

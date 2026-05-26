@@ -504,18 +504,46 @@ def _build_onboarding_signals(context: SessionContext) -> dict:
     if age is not None:
         signals["age"] = age
 
-    # topic이 대분류 수준일 때 → 프로파일 sub-category를 약한 신호로 추가
-    # "소설 추천해줘" + profile: 한국소설/프랑스소설 선호 → preferred_sub_categories 투입
+    # topic이 대분류 수준일 때 → preferred_sub_categories를 약한 신호로 추가
+    # 우선순위: preferred_categories(직접 선택) > recent_liked_books.mid_cate(독서 이력 추론)
     if context.slots.topic.is_filled():
-        fine_set = set(context.slots.topic.fine or [])
+        fine_set  = set(context.slots.topic.fine   or [])
+        coarse_set = set(context.slots.topic.coarse or [])
+
         if fine_set and fine_set.issubset(BROAD_TOPICS):
+            preferred_subs: list[str] = []
+
+            # ① preferred_categories에서 fine과 겹치는 sub 추출 (기존 로직)
             categories = ob.get("preferred_categories", [])
-            relevant_subs = [
+            preferred_subs = [
                 c["sub"] for c in categories
                 if c.get("main") in fine_set and c.get("sub")
             ]
-            if relevant_subs:
-                signals["preferred_sub_categories"] = relevant_subs
+
+            # ② preferred_subs가 없을 때만 recent_liked_books.mid_cate 활용
+            # 조건: 세션 topic이 끝까지 broad(아무거나/상관없어요)인 경우
+            # 최근 읽은 책의 mid_cate 중 세션 coarse와 같은 상위 카테고리에 속하는 것만 추출
+            if not preferred_subs:
+                from app.modules.llm.category_mapper import get_coarse_category
+                recent = ob.get("recent_liked_books") or []
+                liked_mids: list[str] = []
+                for book in recent:
+                    raw = book.get("mid_cate", "")
+                    mids = raw if isinstance(raw, list) else ([raw] if raw else [])
+                    for mid in mids:
+                        if not mid:
+                            continue
+                        book_coarse = get_coarse_category(mid)
+                        if book_coarse and (book_coarse in coarse_set or book_coarse in fine_set):
+                            liked_mids.append(mid)
+                if liked_mids:
+                    preferred_subs = list(dict.fromkeys(liked_mids))  # 순서 유지 + 중복 제거
+                    logger.debug(
+                        "recent_liked_books mid_cate → preferred_sub_categories: %s", preferred_subs
+                    )
+
+            if preferred_subs:
+                signals["preferred_sub_categories"] = preferred_subs
 
     # disliked_keywords: 충돌 판단 후 조건부 사용
     # 충돌 케이스: "전쟁 역사책" + 온보딩 "너무 잔인한" → 온보딩 비활성

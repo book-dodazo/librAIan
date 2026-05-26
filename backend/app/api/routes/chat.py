@@ -16,10 +16,16 @@
 """
 import asyncio
 import logging
+from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.core.auth import get_optional_user_id
 from app.core.exceptions import LLMCallError
+from app.db.database import get_db
+from app.models.chat_session import ChatSession
 from app.schemas.chat_schema import ChatRequest, SlotChatResponse
 from app.services.chat_service import chat_service
 
@@ -28,6 +34,68 @@ _REQUEST_TIMEOUT = 90  # 초 — 요청 전체 타임아웃
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+
+def _save_session(
+    db          : Session,
+    user_id     : int,
+    session_id  : Optional[int],
+    request     : ChatRequest,
+    response    : SlotChatResponse,
+) -> int:
+    """교환 후 세션 저장/업데이트 — session_id 반환"""
+    # UI 메시지 누적 (user + assistant)
+    new_messages = list(request.context.get("_ui_messages", []) if request.context else [])
+    new_messages.append({"role": "user", "text": request.query})
+    new_messages.append({
+        "role"                : "assistant",
+        "text"                : response.message,
+        "isConfirmation"      : response.is_confirmation,
+        "inferred_summary"    : response.inferred_summary,
+        "isClarification"     : response.needs_clarification,
+        "clarification_question": response.clarification_question,
+        "choices"             : response.clarification_choices,
+        "pending_slots"       : response.pending_slots,
+        "hasResults"          : response.ready_for_rag and bool(response.search_results),
+        "search_results"      : response.search_results,
+        "availability_index"  : response.availability_index,
+    })
+
+    # context에 UI 메시지 목록 첨부 (다음 턴에 전달)
+    ctx = dict(response.context or {})
+    ctx["_ui_messages"] = new_messages
+
+    if session_id:
+        row = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.user_id == user_id).first()
+        if row:
+            row.messages      = new_messages
+            row.context       = ctx
+            row.history       = request.history + [
+                {"role": "user",      "content": request.query},
+                {"role": "assistant", "content": response.message},
+            ]
+            row.pending_slots = response.pending_slots
+            row.updated_at    = datetime.now(timezone.utc)
+            db.commit()
+            return row.id
+
+    # 신규 세션 생성 — 제목은 첫 질의에서 자동 생성
+    title = request.query[:50] + ("..." if len(request.query) > 50 else "")
+    row = ChatSession(
+        user_id      = user_id,
+        title        = title,
+        messages     = new_messages,
+        context      = ctx,
+        history      = [
+            {"role": "user",      "content": request.query},
+            {"role": "assistant", "content": response.message},
+        ],
+        pending_slots = response.pending_slots,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row.id
 
 
 @router.post(
@@ -45,12 +113,29 @@ router = APIRouter(prefix="/api", tags=["chat"])
 **주의:** 매 응답의 `context`를 저장해두었다가 다음 요청에 포함해야 합니다.
     """,
 )
-async def chat_endpoint(request: ChatRequest) -> SlotChatResponse:
+async def chat_endpoint(
+    request : ChatRequest,
+    user_id : Optional[int] = Depends(get_optional_user_id),
+    db      : Session       = Depends(get_db),
+) -> SlotChatResponse:
     try:
-        return await asyncio.wait_for(
+        response = await asyncio.wait_for(
             chat_service.handle(request),
             timeout=_REQUEST_TIMEOUT,
         )
+
+        # 로그인된 유저면 세션 자동 저장
+        if user_id:
+            try:
+                sid = _save_session(db, user_id, request.session_id, request, response)
+                response.session_id = sid
+                # context에도 _ui_messages 반영된 버전으로 교체
+                if response.context:
+                    response.context["_ui_messages"] = response.context.get("_ui_messages", [])
+            except Exception as e:
+                logger.warning("세션 저장 실패 (non-critical): %s", e)
+
+        return response
     except asyncio.TimeoutError:
         logger.error("요청 타임아웃: %ds 초과", _REQUEST_TIMEOUT)
         raise HTTPException(
