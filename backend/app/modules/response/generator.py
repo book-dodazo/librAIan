@@ -74,7 +74,8 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
     from sqlalchemy import text
     placeholders = ", ".join(f"'{isbn}'" for isbn in isbns)
     query = text(f"""
-        SELECT isbn, ori_cover_s, book_intro, review, review_count, review_score
+        SELECT isbn, ori_cover_s, book_intro, review, review_count, review_score,
+               book_index, page, publish_date
         FROM books
         WHERE isbn IN ({placeholders})
     """)
@@ -97,11 +98,19 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
             raw_score = row[5]
             review_score = round(float(raw_score) / 2, 1) if raw_score else None
 
+            # book_index (목차), page, publish_date
+            book_index   = (row[6] or "")[:1200]  # 목차 최대 1200자
+            page         = row[7]
+            publish_date = str(row[8]) if row[8] else ""
+
             result[row[0]] = {
-                "cover_url"     : row[1] or "",
-                "book_intro"    : (row[2] or "")[:800],
-                "reader_review" : reader_review,
-                "review_score"  : review_score,
+                "cover_url"    : row[1] or "",
+                "book_intro"   : (row[2] or "")[:800],
+                "reader_review": reader_review,
+                "review_score" : review_score,
+                "book_index"   : book_index,
+                "page"         : page,
+                "publish_date" : publish_date,
             }
     except Exception as e:
         logger.error("책 상세 정보 조회 실패: %s", e)
@@ -199,6 +208,15 @@ async def _generate_reason(
     user_profile     = _build_user_profile(onboarding)
 
     reader_review = book_detail.get("reader_review", "")
+
+    # 목차: ES book_index_text → PostgreSQL book_index fallback
+    raw_toc = (
+        book.get("book_index_text", "")
+        or book_detail.get("book_index", "")
+        or ""
+    ).strip()
+    book_index_for_prompt = raw_toc[:600] if raw_toc else "목차 정보 없음"
+
     prompt = RECOMMENDATION_REASON_PROMPT.format(
         request_analysis = request_analysis,
         user_profile     = user_profile,
@@ -206,6 +224,7 @@ async def _generate_reason(
         author           = book.get("author", ""),
         category         = book.get("category", ""),
         book_intro       = book_detail.get("book_intro", "정보 없음"),
+        book_index       = book_index_for_prompt,
         reader_review    = reader_review if reader_review else "리뷰 정보 없음",
     )
 
@@ -288,6 +307,17 @@ async def generate_result_cards(
         # ── 책 소개: PostgreSQL → ES fallback
         book_intro = detail.get("book_intro") or (book.get("book_intro") or "")[:800]
 
+        # ── 목차: ES book_index_text → PostgreSQL book_index fallback, 500자 중략
+        raw_toc = (
+            book.get("book_index_text", "")
+            or detail.get("book_index", "")
+            or ""
+        ).strip()
+        if len(raw_toc) > 500:
+            toc = raw_toc[:500] + "… (중략)"
+        else:
+            toc = raw_toc
+
         # ── 독자 리뷰: PostgreSQL → ES(review + review_count) fallback
         reader_review = detail.get("reader_review", "")
         if not reader_review:
@@ -307,8 +337,11 @@ async def generate_result_cards(
             "publisher"             : book.get("publisher", ""),
             "cover_url"             : cover_url,
             "book_intro"            : book_intro,
+            "book_index_text"       : toc,                             # 목차 (ES 우선, PostgreSQL fallback)
+            "page"                  : detail.get("page") or book.get("page"),
+            "publish_date"          : detail.get("publish_date", "") or str(book.get("publish_date", "") or ""),
             "reader_review"         : reader_review,
-            "review_score"          : detail.get("review_score"),  # ES에는 없으므로 PostgreSQL에 있을 때만
+            "review_score"          : detail.get("review_score"),      # ES에는 없으므로 PostgreSQL에 있을 때만
             "recommendation_reason" : reason,
             "loan_available"        : book.get("loan_available", "-"),
             "has_book"              : book.get("has_book", "-"),
