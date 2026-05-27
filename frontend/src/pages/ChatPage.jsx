@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useChat from '../hooks/useChat';
 import { getUser } from '../utils';
@@ -8,6 +8,7 @@ import { SlotStatusBar, MessageBubble, ChatInput, EmptyState, LoadingBubble } fr
 export default function ChatPage() {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
+  const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
   const { messages, filledSlots, isLoading, sessionId, sendMessage, selectChoice, confirmInferred, resetChat, loadSession } = useChat();
 
   const user = getUser(); // null이면 게스트
@@ -17,6 +18,12 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // 새 대화 시작: 채팅 초기화 + 사이드바 세션 목록 새로고침
+  const handleRestart = useCallback(() => {
+    resetChat();
+    setSessionRefreshKey((k) => k + 1);
+  }, [resetChat]);
+
   const lastResultMsg = [...messages].reverse().find((m) => m.hasResults);
 
   return (
@@ -24,7 +31,8 @@ export default function ChatPage() {
       <Sidebar
         userName={user?.name}
         isGuest={isGuest}
-        onRestart={resetChat}
+        onRestart={handleRestart}
+        refreshKey={sessionRefreshKey}
         onFeedback={() =>
           navigate('/feedback', { state: { results: lastResultMsg?.search_results, availability: lastResultMsg?.availability_index } })
         }

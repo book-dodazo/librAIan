@@ -32,6 +32,7 @@ export default function useChat() {
       hasResults: response.ready_for_rag && !!response.search_results,
       search_results: response.search_results ?? null,
       availability_index: response.availability_index ?? null,
+      follow_up_choices: response.follow_up_choices ?? null,
       error: response.error ?? null,
     };
     setMessages((prev) => [...prev, msg]);

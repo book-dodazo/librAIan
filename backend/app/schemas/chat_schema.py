@@ -101,6 +101,10 @@ class SlotChatResponse(BaseModel):
     # 형태: {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
     availability_index    : Optional[dict[str, Any]]= None
 
+    # 추천 후속 질문 선택지
+    # [{"label": "비슷한 책 더 추천받기", "follow_up": "refine"}, ...]
+    follow_up_choices     : Optional[list[dict]]    = None
+
     # 세션
     session_id            : Optional[int]           = None
 
