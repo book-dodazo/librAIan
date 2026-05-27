@@ -7,6 +7,7 @@
 #          chat_service.py에서 파이프라인 단계 분리
 #   v0.2 - Reranker 연동 (app/modules/reranker/clova_reranker.py)
 #          availability 조회 연동 (app/services/loan_availability.py)
+#   v0.3 - Reranker 교체: CLOVA → BGE Cross-Encoder (BD variant, Score Fusion α=0.2)
 #
 # 새 단계 추가 방법:
 #   1. 아래에 async def run_xxx() 또는 def run_xxx() 추가
@@ -22,7 +23,7 @@
 현재 단계:
     [2] run_rag_query     → RAG 쿼리 생성 (slot/rag_query_builder.py)
     [3] run_hybrid_search   → Hybrid 검색 (modules/RAG/retriever.py)
-    [4] run_reranker      → CLOVA Reranker (models/clova_reranker.py)
+    [4] run_reranker      → BGE Cross-Encoder Reranker (modules/reranker/bge_reranker.py)
     [5] run_availability  → 대출 가능 여부 조회 (models/loan_availability.py)
 """
 import logging
@@ -34,10 +35,7 @@ from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext
 from app.modules.RAG.anchor_book_pipeline import run_anchor_pipeline
 from app.modules.RAG.final_hybrid import full_hybrid
-from app.modules.reranker.clova_reranker import (
-            call_clova_reranker,
-            create_payload_and_rerank,
-        )
+from app.modules.reranker.bge_reranker import rerank as bge_rerank
 from app.services.loan_availability import check_books_availability
 
 logger = logging.getLogger(__name__)
@@ -190,23 +188,21 @@ def run_hybrid_search(
 
 
 def run_reranker(
-    hybrid_results : list[dict],
-    rag_query    : dict[str, Any],
-    clova_api_key: Optional[str] = None,
+    hybrid_results: list[dict],
+    rag_query     : dict[str, Any],
 ) -> list[dict]:
     """
-    [4단계] CLOVA Reranker (B파트 연동)
+    [4단계] BGE Cross-Encoder Reranker
 
-    app/modules/reranker/clova_reranker.py의
-    create_payload_and_rerank() + call_clova_reranker()를 호출합니다.
+    app/modules/reranker/bge_reranker.py의 rerank()를 호출합니다.
 
-    clova_api_key 없으면 payload 생성까지만 하고 Hybrid 결과 그대로 반환.
-    모듈이 없으면 빈 리스트 반환 (graceful skip).
+    - 모델: BAAI/bge-reranker-v2-m3
+    - 입력 포맷: BD variant (도서명 + 중분류 카테고리 + 책소개 + 리뷰)
+    - Score Fusion: 0.2 × norm(retrieval) + 0.8 × norm(bge)  [실험 최적값 α=0.2]
 
     Args:
-        Hybrid_results : run_Hybrid_search()의 결과
-        rag_query    : RAG 쿼리 딕셔너리 (query 생성에 사용)
-        clova_api_key: CLOVA API 키 (없으면 reranking 스킵)
+        hybrid_results: run_hybrid_search()의 결과
+        rag_query     : RAG 쿼리 딕셔너리 (semantic_query 또는 keyword_query 사용)
 
     Returns:
         재순위된 도서 목록
@@ -216,44 +212,19 @@ def run_reranker(
         return []
 
     try:
-        # rag_query를 reranker가 기대하는 reconstructed_session 형태로 전달
-        reconstructed_session = rag_query
-
-        api_key = clova_api_key or os.getenv("CLOVA_API_KEY", "")
-
-        if not api_key:
-            logger.warning("CLOVA_API_KEY 없음 — Reranking 스킵, Hybrid 결과 그대로 사용")
-            return []
-
-        # Step 1: payload 생성
-        prepared = create_payload_and_rerank(
-            reconstructed_session = reconstructed_session,
-            search_candidates     = hybrid_results,
-            clova_response        = None,
+        result  = bge_rerank(
+            search_candidates = hybrid_results,
+            rag_query         = rag_query,
         )
-
-        # Step 2: CLOVA API 호출
-        clova_response = call_clova_reranker(
-            payload = prepared["clova_payload"],
-            api_key = api_key,
-        )
-
-        # Step 3: 최종 재정렬
-        final_result = create_payload_and_rerank(
-            reconstructed_session = reconstructed_session,
-            search_candidates     = hybrid_results,
-            clova_response        = clova_response,
-        )
-
-        reranked = final_result.get("reranked_books", [])
-        logger.info("Reranking 완료: %d건", len(reranked))
+        reranked = result.get("reranked_books", [])
+        logger.info("BGE Reranking 완료: %d건", len(reranked))
         return reranked
 
     except ImportError:
-        logger.warning("Reranker 모듈 없음 (app/modules/reranker/clova_reranker.py) — 스킵")
+        logger.warning("BGE Reranker 의존성 없음 (sentence-transformers / torch) — 스킵")
         return []
     except Exception as e:
-        logger.error("Reranking 실패: %s", e)
+        logger.error("BGE Reranking 실패: %s", e, exc_info=True)
         return []
 
 
@@ -350,10 +321,10 @@ async def run_full_pipeline(
         ]
         logger.info("refinement 제외: %d → %d건", before, len(result.hybrid_results))
 
-    # [4] CLOVA Reranker
+    # [4] BGE Cross-Encoder Reranker
     result.reranked_results = run_reranker(
         hybrid_results = result.hybrid_results,
-        rag_query    = result.rag_query,
+        rag_query      = result.rag_query,
     )
 
     # [5] 대출 가능 여부 조회 — 전체 결과 대상 (대출 가능 책 탐색 범위 확대)
