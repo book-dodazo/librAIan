@@ -33,7 +33,7 @@ from typing import Any, Optional
 from app.modules.slot.rag_query_builder import build_rag_query
 from app.modules.slot.schema import SessionContext
 from app.modules.RAG.anchor_book_pipeline import run_anchor_pipeline
-from app.modules.RAG.retriever import full_hybrid
+from app.modules.RAG.final_hybrid import full_hybrid
 from app.modules.reranker.clova_reranker import (
             call_clova_reranker,
             create_payload_and_rerank,
