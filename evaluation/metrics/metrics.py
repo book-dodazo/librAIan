@@ -51,6 +51,27 @@ def ndcg_at_k(relevant_isbns, reranked_isbns, k=5):
 
     return dcg / ideal_dcg if ideal_dcg else 0
 
+
+def graded_ndcg_at_k(relevance_scores, reranked_isbns, k=10):
+    '''
+    Graded NDCG: grade 2→gain=2, grade 3→gain=3, grade 0/1→gain=0.
+    relevance_scores: {isbn: final_grade}
+    '''
+    def gain(grade):
+        return grade if grade >= 2 else 0
+
+    dcg = sum(
+        gain(relevance_scores.get(isbn, 0)) / math.log2(i + 1)
+        for i, isbn in enumerate(reranked_isbns[:k], start=1)
+    )
+    ideal_gains = sorted([gain(g) for g in relevance_scores.values()], reverse=True)[:k]
+    idcg = sum(
+        g / math.log2(i + 1)
+        for i, g in enumerate(ideal_gains, start=1)
+    )
+    return dcg / idcg if idcg else 0
+
+
 def hard_negative_at_k(hard_negative_isbns, reranked_isbns, k=5):
     '''
     상위 K개에 hard negative가 포함된 개수
