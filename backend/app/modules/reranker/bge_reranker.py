@@ -25,7 +25,14 @@ MODEL_NAME = os.getenv(
     "BGE_RERANKER_MODEL",
     "BAAI/bge-reranker-v2-m3",
 )
-DEVICE     = os.getenv("BGE_RERANKER_DEVICE", "cpu")
+def _default_device() -> str:
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
+
+DEVICE     = os.getenv("BGE_RERANKER_DEVICE", _default_device())
 MAX_LENGTH = int(os.getenv("BGE_RERANKER_MAX_LENGTH", "512"))
 
 # Score Fusion 가중치 (실험 최적값: α=0.2)
@@ -86,6 +93,17 @@ def fetch_books_by_isbn(isbns: List[str]) -> Dict[str, Dict[str, Any]]:
     for row in rows:
         book = dict(row)
         book["publish_date"] = str(book["publish_date"]) if book["publish_date"] else ""
+         # review(jsonb) → 평문 텍스트로 변환
+        review = book.get("review") or {}
+        if isinstance(review, dict):
+            parts = [
+                review.get("reader_reaction", ""),
+                review.get("strengths", ""),
+                review.get("recommended_for", ""),
+            ]
+            book["review_text"] = " ".join(p for p in parts if p).strip()
+        else:
+            book["review_text"] = ""
         book_index[book["isbn"]] = book
     return book_index
 
@@ -107,7 +125,7 @@ def format_bd(book: Dict[str, Any]) -> str:
         f"도서명: {book.get('title', '')}\n"
         f"카테고리: {mid}\n"
         f"책소개: {book.get('book_intro', '') or ''}\n"
-        f"리뷰: {book.get('review', '') or ''}"
+        f"리뷰: {book.get('review_text', '') or ''}"
     )
 
 
