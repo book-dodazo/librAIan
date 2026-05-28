@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useChat from '../hooks/useChat';
 import { getUser } from '../utils';
@@ -8,36 +8,44 @@ import { SlotStatusBar, MessageBubble, ChatInput, EmptyState, LoadingBubble } fr
 export default function ChatPage() {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
-  const { messages, filledSlots, isLoading, sendMessage, selectChoice, confirmInferred, resetChat } = useChat();
+  const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
+  const { messages, filledSlots, isLoading, sessionId, sendMessage, selectChoice, confirmInferred, resetChat, loadSession } = useChat();
 
-  const user = getUser() ?? {};
-
-  useEffect(() => {
-    if (!getUser()) navigate('/login');
-  }, [navigate]);
+  const user = getUser(); // null이면 게스트
+  const isGuest = !user;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  // 새 대화 시작: 채팅 초기화 + 사이드바 세션 목록 새로고침
+  const handleRestart = useCallback(() => {
+    resetChat();
+    setSessionRefreshKey((k) => k + 1);
+  }, [resetChat]);
 
   const lastResultMsg = [...messages].reverse().find((m) => m.hasResults);
 
   return (
     <div className="flex h-screen overflow-hidden bg-paper font-sans">
       <Sidebar
-        userName={user.name}
-        onRestart={resetChat}
+        userName={user?.name}
+        isGuest={isGuest}
+        onRestart={handleRestart}
+        refreshKey={sessionRefreshKey}
         onFeedback={() =>
           navigate('/feedback', { state: { results: lastResultMsg?.search_results, availability: lastResultMsg?.availability_index } })
         }
-        onProfile={() => navigate('/profile')}
+        onProfile={() => isGuest ? navigate('/login') : navigate('/profile')}
+        onLoadSession={loadSession}
+        currentSessionId={sessionId}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
         <div className="flex items-center justify-between px-8 py-5 border-b border-ink/10 bg-paper flex-shrink-0">
           <h1 className="font-serif text-base text-ink-soft">AI 도서 큐레이션</h1>
           <span className="text-xs tracking-widest uppercase px-3 py-1 border border-ink/10 rounded-full text-ink-muted">
-            책마루
+            librAIan
           </span>
         </div>
 

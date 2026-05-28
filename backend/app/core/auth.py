@@ -28,3 +28,16 @@ def get_current_user_id(
         return int(payload["sub"])
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰입니다.")
+
+
+def get_optional_user_id(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Optional[int]:
+    """로그인 안 해도 되는 엔드포인트용 — 토큰 있으면 user_id, 없으면 None"""
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=["HS256"])
+        return int(payload["sub"])
+    except JWTError:
+        return None

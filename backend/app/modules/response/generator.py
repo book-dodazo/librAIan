@@ -22,6 +22,7 @@
     }
 """
 import asyncio
+import json
 import logging
 import re
 from typing import Any, Optional
@@ -32,6 +33,30 @@ from app.modules.llm.clova_client import chat_complete
 from app.prompts.response import RECOMMENDATION_REASON_PROMPT
 
 logger = logging.getLogger(__name__)
+
+
+# ── 리뷰 텍스트 빌더 ───────────────────────────────────────────
+
+def _build_reader_review(review: dict, review_count: int) -> str:
+    """
+    DB review JSON + review_count → 프롬프트용 독자 평가 텍스트.
+    리뷰가 없으면 빈 문자열 반환.
+    """
+    if not review or review_count == 0:
+        return ""
+
+    parts = []
+    if review.get("strengths"):
+        parts.append(f"좋은 점: {review['strengths']}")
+    if review.get("reader_reaction"):
+        parts.append(f"독자 반응: {review['reader_reaction']}")
+    if review.get("weaknesses"):
+        parts.append(f"아쉬운 점: {review['weaknesses']}")
+
+    if not parts:
+        return ""
+
+    return f"(리뷰 {review_count}건) " + " / ".join(parts)
 
 
 # ── DB 조회 ────────────────────────────────────────────────────
@@ -49,7 +74,8 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
     from sqlalchemy import text
     placeholders = ", ".join(f"'{isbn}'" for isbn in isbns)
     query = text(f"""
-        SELECT isbn, ori_cover_s, book_intro
+        SELECT isbn, ori_cover_s, book_intro, review, review_count, review_score,
+               book_index, page, publish_date
         FROM books
         WHERE isbn IN ({placeholders})
     """)
@@ -58,9 +84,33 @@ def fetch_book_details(isbns: list[str], db: Session) -> dict[str, dict]:
     try:
         rows = db.execute(query).fetchall()
         for row in rows:
+            # review JSON에서 독자 반응 텍스트 추출
+            review_raw = row[3] or {}
+            if isinstance(review_raw, str):
+                import json as _json
+                try:
+                    review_raw = _json.loads(review_raw)
+                except Exception:
+                    review_raw = {}
+            reader_review = _build_reader_review(review_raw, row[4] or 0)
+
+            # review_score: 0~10 스케일 → 5점 만점으로 변환
+            raw_score = row[5]
+            review_score = round(float(raw_score) / 2, 1) if raw_score else None
+
+            # book_index (목차), page, publish_date
+            book_index   = (row[6] or "")[:1200]  # 목차 최대 1200자
+            page         = row[7]
+            publish_date = str(row[8]) if row[8] else ""
+
             result[row[0]] = {
-                "cover_url"  : row[1] or "",
-                "book_intro" : (row[2] or "")[:800],  # 프롬프트 길이 제한
+                "cover_url"    : row[1] or "",
+                "book_intro"   : (row[2] or "")[:800],
+                "reader_review": reader_review,
+                "review_score" : review_score,
+                "book_index"   : book_index,
+                "page"         : page,
+                "publish_date" : publish_date,
             }
     except Exception as e:
         logger.error("책 상세 정보 조회 실패: %s", e)
@@ -98,10 +148,15 @@ def _build_request_analysis(rag_query: dict, original_query: str) -> str:
 
     anchors = rag_query.get("anchors")
     if anchors:
-        anchor_type = anchors.get("type", "")
-        anchor_val  = anchors.get("value", "")
-        if anchor_val:
-            parts.append(f"기준 {anchor_type}: {anchor_val}")
+        # anchors가 list인 경우 모든 항목 처리, dict인 경우 단일 처리
+        anchor_list = anchors if isinstance(anchors, list) else [anchors]
+        for anchor in anchor_list:
+            if not isinstance(anchor, dict):
+                continue
+            anchor_type = anchor.get("type", "")
+            anchor_val  = anchor.get("value", "")
+            if anchor_val:
+                parts.append(f"기준 {anchor_type}: {anchor_val}")
 
     return "\n".join(f"- {p}" for p in parts)
 
@@ -157,6 +212,16 @@ async def _generate_reason(
     request_analysis = _build_request_analysis(rag_query, original_query)
     user_profile     = _build_user_profile(onboarding)
 
+    reader_review = book_detail.get("reader_review", "")
+
+    # 목차: ES book_index_text → PostgreSQL book_index fallback
+    raw_toc = (
+        book.get("book_index_text", "")
+        or book_detail.get("book_index", "")
+        or ""
+    ).strip()
+    book_index_for_prompt = raw_toc[:600] if raw_toc else "목차 정보 없음"
+
     prompt = RECOMMENDATION_REASON_PROMPT.format(
         request_analysis = request_analysis,
         user_profile     = user_profile,
@@ -164,6 +229,8 @@ async def _generate_reason(
         author           = book.get("author", ""),
         category         = book.get("category", ""),
         book_intro       = book_detail.get("book_intro", "정보 없음"),
+        book_index       = book_index_for_prompt,
+        reader_review    = reader_review if reader_review else "리뷰 정보 없음",
     )
 
     try:
@@ -238,13 +305,48 @@ async def generate_result_cards(
     for book, reason in zip(final_results, reasons):
         isbn   = book.get("isbn", "")
         detail = book_detail.get(isbn, {})
+
+        # ── 표지 URL: PostgreSQL → ES(ori_cover_s) fallback
+        cover_url = detail.get("cover_url") or book.get("ori_cover_s", "")
+
+        # ── 책 소개: PostgreSQL → ES fallback
+        book_intro = detail.get("book_intro") or (book.get("book_intro") or "")[:800]
+
+        # ── 목차: ES book_index_text → PostgreSQL book_index fallback, 500자 중략
+        raw_toc = (
+            book.get("book_index_text", "")
+            or detail.get("book_index", "")
+            or ""
+        ).strip()
+        if len(raw_toc) > 500:
+            toc = raw_toc[:500] + "… (중략)"
+        else:
+            toc = raw_toc
+
+        # ── 독자 리뷰: PostgreSQL → ES(review + review_count) fallback
+        reader_review = detail.get("reader_review", "")
+        if not reader_review:
+            review_raw = book.get("review") or {}
+            if isinstance(review_raw, str):
+                try:
+                    review_raw = json.loads(review_raw)
+                except Exception:
+                    review_raw = {}
+            review_count = int(book.get("review_count") or 0)
+            reader_review = _build_reader_review(review_raw, review_count)
+
         cards.append({
             "isbn"                  : isbn,
             "title"                 : book.get("title", ""),
             "author"                : book.get("author", ""),
             "publisher"             : book.get("publisher", ""),
-            "cover_url"             : detail.get("cover_url", ""),
-            "book_intro"            : detail.get("book_intro", ""),
+            "cover_url"             : cover_url,
+            "book_intro"            : book_intro,
+            "book_index_text"       : toc,                             # 목차 (ES 우선, PostgreSQL fallback)
+            "page"                  : detail.get("page") or book.get("page"),
+            "publish_date"          : detail.get("publish_date", "") or str(book.get("publish_date", "") or ""),
+            "reader_review"         : reader_review,
+            "review_score"          : detail.get("review_score"),      # ES에는 없으므로 PostgreSQL에 있을 때만
             "recommendation_reason" : reason,
             "loan_available"        : book.get("loan_available", "-"),
             "has_book"              : book.get("has_book", "-"),

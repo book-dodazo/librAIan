@@ -45,7 +45,29 @@ export default function MessageBubble({ message, onSelectChoice, onConfirm }) {
             />
           )}
           {message.hasResults && (
-            <BookResults results={message.search_results} availabilityIndex={message.availability_index} />
+            <BookResults
+              results={message.search_results}
+              alsoResults={message.also_results}
+              availabilityIndex={message.availability_index}
+            />
+          )}
+          {/* 추천 후 후속 질문 선택지 */}
+          {message.follow_up_choices && (
+            <div className="mt-4 flex gap-2 flex-wrap">
+              {message.follow_up_choices.map((choice) => (
+                <button
+                  key={choice.follow_up}
+                  onClick={() => onSelectChoice(choice, ['follow_up'])}
+                  className={`text-xs px-3 py-2 rounded-lg border transition-colors font-medium ${
+                    choice.follow_up === 'refine'
+                      ? 'bg-ink text-paper border-ink hover:bg-ink/80'
+                      : 'bg-white text-ink border-ink/20 hover:bg-paper-2'
+                  }`}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>

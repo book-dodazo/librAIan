@@ -34,8 +34,10 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.profile import router as profile_router
 from app.api.routes.onboarding import router as onboarding_router
 from app.api.routes.eval import router as eval_router
+from app.api.routes.sessions import router as sessions_router
 from app.db.database import engine, Base
-import app.models.user  # noqa: F401 — 테이블 생성을 위해 import
+import app.models.user          # noqa: F401 — 테이블 생성을 위해 import
+import app.models.chat_session  # noqa: F401 — 테이블 생성을 위해 import
 
 # [FIX v0.2] 로깅 설정을 가장 먼저 실행
 logging.basicConfig(
@@ -88,6 +90,7 @@ app.include_router(auth_router)
 app.include_router(profile_router)
 app.include_router(onboarding_router)
 app.include_router(eval_router)
+app.include_router(sessions_router)
 
 # ── 템플릿 설정 ───────────────────────────────────────────────
 templates = Jinja2Templates(directory="app/templates")

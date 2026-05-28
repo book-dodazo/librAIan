@@ -10,6 +10,7 @@ export default function useChat() {
   const [pendingSlots, setPendingSlots] = useState(null);
   const [filledSlots, setFilledSlots] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
 
   const addUserMessage = (text) => {
     const msg = { id: makeId(), role: 'user', text };
@@ -30,7 +31,9 @@ export default function useChat() {
       pending_slots: response.pending_slots ?? null,
       hasResults: response.ready_for_rag && !!response.search_results,
       search_results: response.search_results ?? null,
+      also_results: response.also_results ?? null,
       availability_index: response.availability_index ?? null,
+      follow_up_choices: response.follow_up_choices ?? null,
       error: response.error ?? null,
     };
     setMessages((prev) => [...prev, msg]);
@@ -45,12 +48,14 @@ export default function useChat() {
         history,
         context,
         user_profile: getOnboardingData(),
+        session_id: sessionId,
         ...apiParams,
       });
 
       setContext(response.context ?? null);
       setPendingSlots(response.pending_slots ?? null);
       setFilledSlots(response.filled_slots ?? []);
+      if (response.session_id) setSessionId(response.session_id);
 
       setHistory((prev) => [
         ...prev,
@@ -100,7 +105,19 @@ export default function useChat() {
     setContext(null);
     setPendingSlots(null);
     setFilledSlots([]);
+    setSessionId(null);
   }, []);
 
-  return { messages, filledSlots, isLoading, sendMessage, selectChoice, confirmInferred, resetChat };
+  // 이전 세션 불러오기
+  const loadSession = useCallback((session) => {
+    const uiMessages = (session.messages || []).map((m) => ({ ...m, id: makeId() }));
+    setMessages(uiMessages);
+    setHistory(session.history || []);
+    setContext(session.context ?? null);
+    setPendingSlots(session.pending_slots ?? null);
+    setFilledSlots([]);
+    setSessionId(session.id);
+  }, []);
+
+  return { messages, filledSlots, isLoading, sessionId, sendMessage, selectChoice, confirmInferred, resetChat, loadSession };
 }
