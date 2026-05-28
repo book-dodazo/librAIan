@@ -337,7 +337,7 @@ def full_dense(result, index_name="books_review_full", size=100, num_candidates=
 
 
 def full_hybrid(result):
-    index_name = "books_review_full"
+    index_name = "books_review_full_100000"
 
     final_size = 20
     bm25_candidate_size = 100

@@ -165,10 +165,7 @@ def run_hybrid_search(
     """
     try:
         results = full_hybrid(
-            result                    = rag_query,
-            index_name                = index_name,
-            size                      = size,
-            small_category_embeddings = small_category_embeddings,
+            result = rag_query,
         )
         logger.info("Hybrid 검색 완료: %d건", len(results))
         return results
