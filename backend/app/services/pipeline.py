@@ -86,7 +86,7 @@ class PipelineResult:
         base = self.reranked_results if self.reranked_results else self.hybrid_results
 
         if not self.availability_index:
-            return base[:3]
+            return base[:2]
 
         # 대출 가능 여부 정보 부착
         books_with_avail = []
@@ -99,31 +99,29 @@ class PipelineResult:
                 "loan_available": avail.get("loan_available", "-"),
             })
 
-        available     = [b for b in books_with_avail if b.get("loan_available") == "Y"]
-        not_available = [b for b in books_with_avail if b.get("loan_available") != "Y"]
-
-        # 대출가능 우선 Top3 — 시나리오 무관하게 primary는 대출가능만
-        return available[:3]
+        available = [b for b in books_with_avail if b.get("loan_available") == "Y"]
+        return available[:2]
 
     @property
     def also_results(self) -> list[dict]:
-        """대출불가 중 상위 적합도 — '이런 책도 있어요!' 섹션용"""
+        """Reranking 1위가 대출불가일 때 그 책 1건 — '이런 책도 있어요!' 섹션용"""
         base = self.reranked_results if self.reranked_results else self.hybrid_results
-        if not self.availability_index:
+        if not self.availability_index or not base:
             return []
 
-        books_with_avail = []
-        for book in base:
-            isbn  = book.get("isbn", "")
-            avail = self.availability_index.get(isbn, {})
-            books_with_avail.append({
-                **book,
-                "has_book"      : avail.get("has_book", "-"),
-                "loan_available": avail.get("loan_available", "-"),
-            })
+        top = base[0]
+        isbn  = top.get("isbn", "")
+        avail = self.availability_index.get(isbn, {})
+        loan_available = avail.get("loan_available", "-")
 
-        not_available = [b for b in books_with_avail if b.get("loan_available") != "Y"]
-        return not_available[:3]
+        if loan_available == "Y":
+            return []
+
+        return [{
+            **top,
+            "has_book"      : avail.get("has_book", "-"),
+            "loan_available": loan_available,
+        }]
 
 
 # ── 파이프라인 단계 함수들 ────────────────────────────────────
