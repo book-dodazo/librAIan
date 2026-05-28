@@ -354,6 +354,16 @@ class ChatService:
                 {"label": "비슷한 책 더 추천받기", "follow_up": "refine"},
                 {"label": "새로운 주제로 찾기",    "follow_up": "new_topic"},
             ]
+        elif also_cards:
+            context.awaiting_follow_up = True
+            message = (
+                f"지금 당장 대출 가능한 책은 없지만, {_describe_slots(context)} 관련 도서 중 적합도 높은 책을 찾았어요.\n\n"
+                "이어서 비슷한 책을 더 추천해 드릴까요, 아니면 새로운 주제로 찾으시겠어요?"
+            )
+            follow_up_choices = [
+                {"label": "비슷한 책 더 추천받기", "follow_up": "refine"},
+                {"label": "새로운 주제로 찾기",    "follow_up": "new_topic"},
+            ]
         else:
             context.awaiting_follow_up = False
             message = f"죄송해요, {_describe_slots(context)} 관련 도서를 찾지 못했어요. 조건을 바꿔서 다시 시도해보세요."
