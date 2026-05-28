@@ -73,7 +73,7 @@ def fetch_books_by_isbn(isbns: List[str]) -> Dict[str, Dict[str, Any]]:
             cur.execute(
                 """
                 SELECT isbn, title, author, publisher, publish_date,
-                       page, book_intro, review_text,
+                       page, book_intro, review,
                        large_cate, mid_cate
                 FROM books
                 WHERE isbn = ANY(%s)
@@ -107,7 +107,7 @@ def format_bd(book: Dict[str, Any]) -> str:
         f"도서명: {book.get('title', '')}\n"
         f"카테고리: {mid}\n"
         f"책소개: {book.get('book_intro', '') or ''}\n"
-        f"리뷰: {book.get('review_text', '') or ''}"
+        f"리뷰: {book.get('review', '') or ''}"
     )
 
 
