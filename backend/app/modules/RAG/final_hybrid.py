@@ -99,12 +99,79 @@ def translate_coarse_to_es(categories):
 
     for c in categories:
         mapped = _COARSE_TO_ES.get(c, c)
+
         if isinstance(mapped, list):
             result.extend(mapped)
         else:
             result.append(mapped)
 
     return result
+
+
+# 성인 사용자에게 기본 제외할 카테고리
+ADULT_EXCLUDE_CATEGORIES = [
+    "고등학교 참고서",
+    "어린이",
+    "유아",
+    "청소년",
+    "중학교 참고서",
+    "초등학교 참고서",
+    "수험서/자격증"
+]
+
+
+# 청소년 사용자에게 기본 제외할 카테고리
+YOUTH_EXCLUDE_CATEGORIES = [
+    "어린이",
+    "유아",
+    "고등학교 참고서",
+    "중학교 참고서",
+    "초등학교 참고서"
+]
+
+
+def should_exclude_youth_categories(result):
+    age = result.get("onboarding_signals", {}).get("age")
+
+    if age is None or age < 20:
+        return False
+
+    requested_large_cates = (
+        result.get("filters", {}).get("cate_depth1")
+        or []
+    )
+
+    requested_large_cates = translate_coarse_to_es(
+        to_list(requested_large_cates)
+    )
+
+    # 사용자가 직접 어린이/청소년/참고서 계열을 요청한 경우 제외하지 않음
+    if any(cate in ADULT_EXCLUDE_CATEGORIES for cate in requested_large_cates):
+        return False
+
+    return True
+
+
+def should_exclude_child_categories_for_youth(result):
+    age = result.get("onboarding_signals", {}).get("age")
+
+    if age is None or not (11 <= age <= 19):
+        return False
+
+    requested_large_cates = (
+        result.get("filters", {}).get("cate_depth1")
+        or []
+    )
+
+    requested_large_cates = translate_coarse_to_es(
+        to_list(requested_large_cates)
+    )
+
+    # 사용자가 직접 어린이/참고서 계열을 요청한 경우 제외하지 않음
+    if any(cate in YOUTH_EXCLUDE_CATEGORIES for cate in requested_large_cates):
+        return False
+
+    return True
 
 
 def make_review_boost_query(query_text, boost=1.1):
@@ -149,6 +216,21 @@ def build_filter_clauses(result):
 
     filter_clause = []
     must_not_clause = []
+
+    # 나이 기반 카테고리 제외
+    if should_exclude_youth_categories(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": ADULT_EXCLUDE_CATEGORIES
+            }
+        })
+
+    if should_exclude_child_categories_for_youth(result):
+        must_not_clause.append({
+            "terms": {
+                "large_cate": YOUTH_EXCLUDE_CATEGORIES
+            }
+        })
 
     if coarse_categories:
         filter_clause.append({
@@ -235,13 +317,40 @@ def build_filter_clauses(result):
             year = int(value)
 
             if operator == "gte":
-                filter_clause.append({"range": {"publish_date": {"gte": f"{year}-01-01"}}})
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gte": f"{year}-01-01"
+                        }
+                    }
+                })
+
             elif operator == "gt":
-                filter_clause.append({"range": {"publish_date": {"gt": f"{year}-12-31"}}})
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "gt": f"{year}-12-31"
+                        }
+                    }
+                })
+
             elif operator == "lte":
-                filter_clause.append({"range": {"publish_date": {"lte": f"{year}-12-31"}}})
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lte": f"{year}-12-31"
+                        }
+                    }
+                })
+
             elif operator == "lt":
-                filter_clause.append({"range": {"publish_date": {"lt": f"{year}-01-01"}}})
+                filter_clause.append({
+                    "range": {
+                        "publish_date": {
+                            "lt": f"{year}-01-01"
+                        }
+                    }
+                })
 
     return filter_clause, must_not_clause
 
@@ -298,7 +407,12 @@ def full_bm25(result, index_name="books_review_full", size=100):
     ]
 
 
-def full_dense(result, index_name="books_review_full", size=100, num_candidates=300):
+def full_dense(
+    result,
+    index_name="books_review_full",
+    size=100,
+    num_candidates=300
+):
     semantic_query = result.get("semantic_query", "").strip()
 
     if not semantic_query:
@@ -365,6 +479,7 @@ def full_hybrid(result):
 
     for rank, r in enumerate(bm25_results, start=1):
         isbn = r.get("isbn")
+
         if not isbn:
             continue
 
@@ -382,6 +497,7 @@ def full_hybrid(result):
 
     for rank, r in enumerate(dense_results, start=1):
         isbn = r.get("isbn")
+
         if not isbn:
             continue
 
@@ -397,6 +513,7 @@ def full_hybrid(result):
                 "bm25_rrf_score": 0.0,
                 "dense_rrf_score": dense_weight * (1 / (rrf_k + rank)),
             }
+
         else:
             merged[isbn]["dense_rank"] = rank
             merged[isbn]["dense_raw_score"] = r.get("score")
