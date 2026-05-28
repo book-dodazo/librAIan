@@ -97,6 +97,9 @@ class SlotChatResponse(BaseModel):
     # 형태: [{"rank": 1, "isbn": "...", "score": 1.23}, ...]
     search_results        : Optional[list[dict]]    = None
 
+    # 대출불가 중 적합도 높은 책 — '이런 책도 있어요!' 섹션용
+    also_results          : Optional[list[dict]]    = None
+
     # 대출 가능 여부 조회 결과
     # 형태: {"isbn": {"has_book": "Y", "loan_available": "Y"}, ...}
     availability_index    : Optional[dict[str, Any]]= None

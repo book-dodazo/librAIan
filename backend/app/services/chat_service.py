@@ -308,6 +308,7 @@ class ChatService:
 
         context.rag_query = pipeline.rag_query
         final_results     = pipeline.final_results
+        also_results      = pipeline.also_results
 
         # Refinement를 위해 이번 추천 ISBN 목록 저장
         # 다음 턴에 "다른거 추천해줘" 등의 요청이 오면 exclude_isbns로 활용
@@ -318,16 +319,26 @@ class ChatService:
 
         # ── 결과 카드 생성 (표지/소개 DB 조회 + 추천 이유 LLM 생성) ──
         result_cards: list[dict] = []
-        if final_results:
+        also_cards:   list[dict] = []
+        if final_results or also_results:
             db = SessionLocal()
             try:
-                result_cards = await generate_result_cards(
-                    final_results  = final_results,
-                    rag_query      = pipeline.rag_query or {},
-                    original_query = context.original_query or "",
-                    onboarding     = context.onboarding,
-                    db             = db,
-                )
+                if final_results:
+                    result_cards = await generate_result_cards(
+                        final_results  = final_results,
+                        rag_query      = pipeline.rag_query or {},
+                        original_query = context.original_query or "",
+                        onboarding     = context.onboarding,
+                        db             = db,
+                    )
+                if also_results:
+                    also_cards = await generate_result_cards(
+                        final_results  = also_results,
+                        rag_query      = pipeline.rag_query or {},
+                        original_query = context.original_query or "",
+                        onboarding     = context.onboarding,
+                        db             = db,
+                    )
             finally:
                 db.close()
 
@@ -370,6 +381,7 @@ class ChatService:
             message             = message,
             rag_query           = pipeline.rag_query,
             search_results      = result_cards if result_cards else None,
+            also_results        = also_cards if also_cards else None,
             availability_index  = pipeline.availability_index if pipeline.availability_index else None,
             follow_up_choices   = follow_up_choices,
             context             = context.model_dump(),

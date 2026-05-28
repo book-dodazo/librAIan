@@ -102,17 +102,28 @@ class PipelineResult:
         available     = [b for b in books_with_avail if b.get("loan_available") == "Y"]
         not_available = [b for b in books_with_avail if b.get("loan_available") != "Y"]
 
-        # [Scenario C] 대출가능 필수 — 대출가능만, 부족해도 3건 이하로 반환
-        if self.availability_required:
-            return available[:3]
+        # 대출가능 우선 Top3 — 시나리오 무관하게 primary는 대출가능만
+        return available[:3]
 
-        # [Scenario A/B] 대출가능 우선, 부족하면 상위 랭킹으로 보충해서 항상 3건
-        result = list(available[:3])
-        for book in not_available:
-            if len(result) >= 3:
-                break
-            result.append(book)
-        return result
+    @property
+    def also_results(self) -> list[dict]:
+        """대출불가 중 상위 적합도 — '이런 책도 있어요!' 섹션용"""
+        base = self.reranked_results if self.reranked_results else self.hybrid_results
+        if not self.availability_index:
+            return []
+
+        books_with_avail = []
+        for book in base:
+            isbn  = book.get("isbn", "")
+            avail = self.availability_index.get(isbn, {})
+            books_with_avail.append({
+                **book,
+                "has_book"      : avail.get("has_book", "-"),
+                "loan_available": avail.get("loan_available", "-"),
+            })
+
+        not_available = [b for b in books_with_avail if b.get("loan_available") != "Y"]
+        return not_available[:3]
 
 
 # ── 파이프라인 단계 함수들 ────────────────────────────────────

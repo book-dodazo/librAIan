@@ -45,7 +45,11 @@ export default function MessageBubble({ message, onSelectChoice, onConfirm }) {
             />
           )}
           {message.hasResults && (
-            <BookResults results={message.search_results} availabilityIndex={message.availability_index} />
+            <BookResults
+              results={message.search_results}
+              alsoResults={message.also_results}
+              availabilityIndex={message.availability_index}
+            />
           )}
           {/* 추천 후 후속 질문 선택지 */}
           {message.follow_up_choices && (

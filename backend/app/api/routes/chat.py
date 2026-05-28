@@ -58,6 +58,7 @@ def _save_session(
         "pending_slots"       : response.pending_slots,
         "hasResults"          : response.ready_for_rag and bool(response.search_results),
         "search_results"      : response.search_results,
+        "also_results"        : response.also_results,
         "availability_index"  : response.availability_index,
     })
 

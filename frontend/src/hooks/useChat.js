@@ -31,6 +31,7 @@ export default function useChat() {
       pending_slots: response.pending_slots ?? null,
       hasResults: response.ready_for_rag && !!response.search_results,
       search_results: response.search_results ?? null,
+      also_results: response.also_results ?? null,
       availability_index: response.availability_index ?? null,
       follow_up_choices: response.follow_up_choices ?? null,
       error: response.error ?? null,
