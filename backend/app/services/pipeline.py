@@ -86,7 +86,7 @@ class PipelineResult:
         base = self.reranked_results if self.reranked_results else self.hybrid_results
 
         if not self.availability_index:
-            return base[:3]
+            return base[:2]
 
         # 대출 가능 여부 정보 부착
         books_with_avail = []
@@ -99,20 +99,29 @@ class PipelineResult:
                 "loan_available": avail.get("loan_available", "-"),
             })
 
-        available     = [b for b in books_with_avail if b.get("loan_available") == "Y"]
-        not_available = [b for b in books_with_avail if b.get("loan_available") != "Y"]
+        available = [b for b in books_with_avail if b.get("loan_available") == "Y"]
+        return available[:2]
 
-        # [Scenario C] 대출가능 필수 — 대출가능만, 부족해도 3건 이하로 반환
-        if self.availability_required:
-            return available[:3]
+    @property
+    def also_results(self) -> list[dict]:
+        """Reranking 1위가 대출불가일 때 그 책 1건 — '이런 책도 있어요!' 섹션용"""
+        base = self.reranked_results if self.reranked_results else self.hybrid_results
+        if not self.availability_index or not base:
+            return []
 
-        # [Scenario A/B] 대출가능 우선, 부족하면 상위 랭킹으로 보충해서 항상 3건
-        result = list(available[:3])
-        for book in not_available:
-            if len(result) >= 3:
-                break
-            result.append(book)
-        return result
+        top = base[0]
+        isbn  = top.get("isbn", "")
+        avail = self.availability_index.get(isbn, {})
+        loan_available = avail.get("loan_available", "-")
+
+        if loan_available == "Y":
+            return []
+
+        return [{
+            **top,
+            "has_book"      : avail.get("has_book", "-"),
+            "loan_available": loan_available,
+        }]
 
 
 # ── 파이프라인 단계 함수들 ────────────────────────────────────
@@ -165,10 +174,7 @@ def run_hybrid_search(
     """
     try:
         results = full_hybrid(
-            result                    = rag_query,
-            index_name                = index_name,
-            size                      = size,
-            small_category_embeddings = small_category_embeddings,
+            result = rag_query,
         )
         logger.info("Hybrid 검색 완료: %d건", len(results))
         return results

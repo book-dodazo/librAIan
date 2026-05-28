@@ -100,6 +100,32 @@ class ChatService:
                 request, context
             )
 
+        # ── 추천 후속 질문 응답 처리 ──────────────────────────
+        if context.awaiting_follow_up and request.selected_choice:
+            follow_up = request.selected_choice.get("follow_up")
+            context.awaiting_follow_up = False
+
+            if follow_up == "refine":
+                # 이어서 추천: 기존 슬롯 유지 + 이전 결과 제외 후 RAG 재실행
+                context.modification_request = "refine"
+                return await self._build_rag_response(context, sl)
+
+            elif follow_up == "new_topic":
+                # 새로운 주제: 컨텍스트 완전 초기화 → 새 주제 입력 유도
+                fresh_ctx = SessionContext(original_query="")
+                fresh_ctx.onboarding = _load_onboarding(request.user_profile)
+                return SlotChatResponse(
+                    needs_clarification = True,
+                    ready_for_rag       = False,
+                    message             = "새로운 주제로 찾아볼게요! 어떤 책을 찾고 계신가요? 😊",
+                    context             = fresh_ctx.model_dump(),
+                    filled_slots        = [],
+                )
+
+        # awaiting_follow_up 상태에서 자유 발화 → 후속 플래그 해제 후 계속 진행
+        if context.awaiting_follow_up:
+            context.awaiting_follow_up = False
+
         # ── 선택지 응답 처리 (사용자가 버튼 선택) ─────────────
         if request.selected_choice and request.pending_slots:
             context = apply_choice(
@@ -130,6 +156,18 @@ class ChatService:
                 signal_result = signal_result,
                 slots_before  = slots_before,
             )
+
+            # ── 무관 질의 감지 (책 검색과 관련 없는 질의) ────────
+            if _is_off_topic_query(request.query, signal_result, context):
+                logger.info("무관 질의 감지 — 슬롯 채우지 않고 재입력 요청")
+                sl._flush_turn()
+                return SlotChatResponse(
+                    needs_clarification = True,
+                    ready_for_rag       = False,
+                    message             = "죄송해요, 책 추천과 관련된 질문만 도와드릴 수 있어요. 찾고 싶으신 책에 대해 알려주세요 😊",
+                    context             = context.model_dump(),
+                    filled_slots        = context.slots.get_filled_slots(),
+                )
 
             try:
                 context = await extract_slots(
@@ -223,6 +261,9 @@ class ChatService:
         if request.context:
             try:
                 context = SessionContext(**request.context)
+                # new_topic 초기화 후 첫 질의: original_query 업데이트
+                if not context.original_query:
+                    context.original_query = request.query
                 # 컨텍스트 복원 시에도 onboarding이 없으면 다시 로드
                 if context.onboarding is None:
                     context.onboarding = _load_onboarding(request.user_profile)
@@ -267,6 +308,7 @@ class ChatService:
 
         context.rag_query = pipeline.rag_query
         final_results     = pipeline.final_results
+        also_results      = pipeline.also_results
 
         # Refinement를 위해 이번 추천 ISBN 목록 저장
         # 다음 턴에 "다른거 추천해줘" 등의 요청이 오면 exclude_isbns로 활용
@@ -277,25 +319,55 @@ class ChatService:
 
         # ── 결과 카드 생성 (표지/소개 DB 조회 + 추천 이유 LLM 생성) ──
         result_cards: list[dict] = []
-        if final_results:
+        also_cards:   list[dict] = []
+        if final_results or also_results:
             db = SessionLocal()
             try:
-                result_cards = await generate_result_cards(
-                    final_results  = final_results,
-                    rag_query      = pipeline.rag_query or {},
-                    original_query = context.original_query or "",
-                    onboarding     = context.onboarding,
-                    db             = db,
-                )
+                if final_results:
+                    result_cards = await generate_result_cards(
+                        final_results  = final_results,
+                        rag_query      = pipeline.rag_query or {},
+                        original_query = context.original_query or "",
+                        onboarding     = context.onboarding,
+                        db             = db,
+                    )
+                if also_results:
+                    also_cards = await generate_result_cards(
+                        final_results  = also_results,
+                        rag_query      = pipeline.rag_query or {},
+                        original_query = context.original_query or "",
+                        onboarding     = context.onboarding,
+                        db             = db,
+                    )
             finally:
                 db.close()
 
         filled  = context.slots.get_filled_slots()
-        message = (
-            f"좋아요! {_describe_slots(context)} 관련 도서 {len(result_cards)}권을 찾았어요."
-            if result_cards
-            else f"죄송해요, {_describe_slots(context)} 관련 도서를 찾지 못했어요. 조건을 바꿔서 다시 시도해보세요."
-        )
+
+        if result_cards:
+            context.awaiting_follow_up = True
+            message = (
+                f"좋아요! {_describe_slots(context)} 관련 도서 {len(result_cards)}권을 찾았어요.\n\n"
+                "이어서 비슷한 책을 더 추천해 드릴까요, 아니면 새로운 주제로 찾으시겠어요?"
+            )
+            follow_up_choices = [
+                {"label": "비슷한 책 더 추천받기", "follow_up": "refine"},
+                {"label": "새로운 주제로 찾기",    "follow_up": "new_topic"},
+            ]
+        elif also_cards:
+            context.awaiting_follow_up = True
+            message = (
+                f"지금 당장 대출 가능한 책은 없지만, {_describe_slots(context)} 관련 도서 중 적합도 높은 책을 찾았어요.\n\n"
+                "이어서 비슷한 책을 더 추천해 드릴까요, 아니면 새로운 주제로 찾으시겠어요?"
+            )
+            follow_up_choices = [
+                {"label": "비슷한 책 더 추천받기", "follow_up": "refine"},
+                {"label": "새로운 주제로 찾기",    "follow_up": "new_topic"},
+            ]
+        else:
+            context.awaiting_follow_up = False
+            message = f"죄송해요, {_describe_slots(context)} 관련 도서를 찾지 못했어요. 조건을 바꿔서 다시 시도해보세요."
+            follow_up_choices = None
 
         # ── 세션 로그 기록 ────────────────────────────────────
         if sl:
@@ -319,7 +391,9 @@ class ChatService:
             message             = message,
             rag_query           = pipeline.rag_query,
             search_results      = result_cards if result_cards else None,
+            also_results        = also_cards if also_cards else None,
             availability_index  = pipeline.availability_index if pipeline.availability_index else None,
+            follow_up_choices   = follow_up_choices,
             context             = context.model_dump(),
             filled_slots        = filled,
         )
@@ -822,3 +896,39 @@ def _load_onboarding(user_profile: Optional[dict]) -> Optional[dict]:
 
     logger.info("온보딩 로드: user_id=%s", user_id)
     return record
+
+
+# ── 무관 질의 감지 ─────────────────────────────────────────────
+
+_BOOK_KEYWORDS = frozenset([
+    "책", "읽", "소설", "추천", "도서", "에세이", "시집", "장르",
+    "작가", "출판", "문학", "독서", "도서관", "빌리", "대출",
+    "만화", "웹툰", "sf", "로맨스", "스릴러", "미스터리", "역사",
+    "철학", "자기계발", "경제", "경영", "과학", "심리", "인문",
+    "biography", "novel", "book",
+])
+
+
+def _is_off_topic_query(query: str, signal_result, context: SessionContext) -> bool:
+    """
+    명백히 책 검색과 무관한 질의인지 판단.
+
+    조건 (모두 만족 시 True):
+    1. 이미 채워진 슬롯 없고, 이전 추천 없음 (멀티턴 중간은 체크 안 함)
+    2. 신호 카테고리가 하나도 감지 안 됨 (needs_llm_fallback=True)
+    3. 책 관련 키워드가 없음
+    """
+    # 멀티턴 도중이거나 후속 질문 대기 중이면 체크 안 함
+    if (context.slots.topic.is_filled()
+            or context.previous_result
+            or context.awaiting_follow_up
+            or context.turn_count > 0):
+        return False
+
+    # 신호가 하나라도 감지됐으면 책 관련 질의
+    if not signal_result.needs_llm_fallback:
+        return False
+
+    # 책 관련 키워드 포함 여부 (대소문자 무관)
+    q_lower = query.lower()
+    return not any(kw in q_lower for kw in _BOOK_KEYWORDS)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { checkHealth, getSessions, deleteSession, getSession } from '../../services';
 
-export default function Sidebar({ userName, isGuest = false, onRestart, onFeedback, onProfile, onLoadSession, currentSessionId }) {
+export default function Sidebar({ userName, isGuest = false, onRestart, onFeedback, onProfile, onLoadSession, currentSessionId, refreshKey = 0 }) {
   const [isHealthy, setIsHealthy] = useState(null);
   const [sessions, setSessions] = useState([]);
 
@@ -14,13 +14,15 @@ export default function Sidebar({ userName, isGuest = false, onRestart, onFeedba
     getSessions().then(setSessions).catch(() => setSessions([]));
   }, [isGuest]);
 
+  // 초기 로드
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
 
+  // "새 대화 시작" 클릭 시에만 목록 새로고침 (매 턴마다 X)
   useEffect(() => {
-    if (currentSessionId) loadSessions();
-  }, [currentSessionId, loadSessions]);
+    if (refreshKey > 0) loadSessions();
+  }, [refreshKey, loadSessions]);
 
   const handleLoad = async (sessionId) => {
     try {

@@ -724,3 +724,7 @@ class SessionContext(BaseModel):
 
     # 개인화 체크인 턴 완료 여부 (대분류 요청 시 mood 체크인 — 한 세션에 한 번)
     personalization_turn_done: bool = False
+
+    # 추천 결과 반환 후 후속 질문 대기 여부
+    # True 일 때 "비슷한 책 더" / "새로운 주제" 선택지를 처리
+    awaiting_follow_up: bool = False
