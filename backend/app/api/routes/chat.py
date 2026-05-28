@@ -29,7 +29,7 @@ from app.models.chat_session import ChatSession
 from app.schemas.chat_schema import ChatRequest, SlotChatResponse
 from app.services.chat_service import chat_service
 
-_REQUEST_TIMEOUT = 90  # 초 — 요청 전체 타임아웃
+_REQUEST_TIMEOUT = 180  # 초 — 요청 전체 타임아웃
 
 logger = logging.getLogger(__name__)
 
