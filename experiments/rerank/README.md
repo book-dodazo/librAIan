@@ -30,8 +30,7 @@ experiments/rerank/
 ├── README.md                            # 이 파일
 ├── src/
 │   ├── book_text_variants.py            # A~E 5가지 variant 포맷 함수
-│   ├── cross_encoder_reranker.py        # CrossEncoder 공통 래퍼
-│   └── llm_listwise_reranker.py         # EXAONE listwise 구현
+│   └── cross_encoder_reranker.py        # CrossEncoder 공통 래퍼
 ├── data/
 │   ├── gold_candidate_pool.json         # 1단계 결과
 │   └── results/
@@ -49,7 +48,7 @@ experiments/rerank/
 
 | 경로 | 용도 |
 |------|------|
-| `evaluation/dataset/goldset_final.json` | Gold Candidate Pool 베이스 (1,698개, final_grade 0~3) |
+| `evaluation/dataset/goldset_final.json` | Gold Candidate Pool 베이스 (final_grade 0~3, 2,519건) |
 | `evaluation/dataset/scenario_data_after_retrieval.json` | 21개 시나리오 RAG query (semantic_query 등) |
 | `evaluation/metrics/metrics.py` | `mrr_at_k()`, `ndcg_at_k()`, `hit_at_k()` |
 | `backend/app/modules/reranker/clova_reranker.py` | CLOVA reranker (참고용) |
@@ -136,3 +135,13 @@ experiments/rerank/
 - `final_grade ≥ 2` = relevant
 - Primary metric: **MRR@10**
 - 시나리오 타입별(`query_type`) 성능 분해로 모델 특성 파악
+
+---
+
+## 최종 선정 결과 (운영 반영)
+
+- **선정 모델**: BGE Cross-Encoder (`BAAI/bge-reranker-v2-m3`)
+- **입력 포맷**: BD variant — 도서명 + 중분류 카테고리 + 책소개 + 리뷰 (Ablation NDCG@10 기준 `BD > D > B > C > A > E`)
+- **Score fusion**: `final_score = 0.2 × norm(retrieval_score) + 0.8 × norm(bge_score)` (retrieval 가중치는 env `BGE_RETRIEVAL_WEIGHT`로 조정)
+- **운영 반영 위치**: [`backend/app/modules/reranker/bge_reranker.py`](../../backend/app/modules/reranker/bge_reranker.py) — GPU 자동 감지(`torch.cuda.is_available()`), sentence-transformers/torch 미설치 시 hybrid 결과로 fallback
+- CLOVA Reranker(`clova_reranker.py`)는 초기 baseline으로 대체·보존됨
