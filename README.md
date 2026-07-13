@@ -22,10 +22,10 @@ ai-book-curation/
 
 - **.github/**: CI/CD 워크플로우와 PR 템플릿.
 - **data_pipeline/**: 크롤러, ETL, 임베딩/인덱싱 배치.
-- **evaluation/**: 평가셋, 메트릭 로직, 리랭커 비교 실험.
+- **evaluation/**: 평가셋(골드셋), 메트릭 로직, 검색/리랭킹 평가 노트북.
 - **backend/**: FastAPI API 서버, 서비스 오케스트레이션, DB/AI 모듈 통합.
 - **frontend/**: React 기반 UI 클라이언트.
-- **experiments/**: Jupyter 노트북, 실험 기록, 결과 시각화.
+- **experiments/**: 추가 실험 — 특히 리랭커 모델 선정 실험(`experiments/rerank`: BGE/GTE/Jina/EXAONE/CLOVA 비교), 실험 기록 및 결과 시각화.
 - **docs/**: 아키텍처, 평가 방법, API 문서.
 
 ## 설치 및 실행
